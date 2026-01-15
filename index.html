@@ -1,41 +1,1386 @@
-<!DOCTYPE html>
-<html lang="pt-pt">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lista de Presentes - Areli & Jordan</title>
-    
-    <!-- React & Babel -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Pinyon+Script&family=Playfair+Display:wght@400;600;700;900&display=swap" rel="stylesheet">
+import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  signInWithCustomToken,
+  signInAnonymously
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  updateDoc, 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  deleteDoc,
+  getDocs,
+  query,
+  where
+} from 'firebase/firestore';
+import { 
+  LayoutDashboard, 
+  Users, 
+  Calendar, 
+  CheckCircle, 
+  Settings, 
+  LogOut, 
+  Menu, 
+  X, 
+  Plus, 
+  Trash2, 
+  UserCheck, 
+  UserMinus, 
+  ShieldAlert, 
+  Clock,
+  ChevronRight, 
+  Bell,
+  Layout, 
+  User,
+  Crown,
+  Lock, 
+  Zap,
+  BookOpen, 
+  ClipboardCheck,
+  Search,
+  Filter,
+  Info,
+  Mail,
+  Phone,
+  Building,
+  Image as ImageIcon,
+  ToggleRight,
+  ToggleLeft,
+  Edit2,
+  FileText,
+  BarChart3,
+  XCircle,
+  Briefcase,
+  Layers,
+  Palette,
+  ChevronDown,
+  Star,
+  Check,
+  Upload,
+  RefreshCw,
+  AlertCircle,
+  UserCircle,
+  ClipboardList,
+  Megaphone,
+  CheckSquare,
+  Square,
+  HelpCircle,
+  Trophy,
+  PieChart,
+  SearchCode,
+  MapPin,
+  Church
+} from 'lucide-react';
 
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+// --- Configuração Firebase ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'gestao-ministerial-v1';
 
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .font-serif { font-family: 'Playfair Display', serif; }
-        .font-script { font-family: 'Pinyon Script', cursive; }
-    </style>
-</head>
-<body class="bg-[#f4f5f0] text-[#2f3b1c]">
-    <div id="root"></div>
+// --- Estilos Dinâmicos Globais ---
+const CustomStyles = ({ primaryColor }) => (
+  <style>{`
+    :root { --primary: ${primaryColor || '#3b82f6'}; }
+    .bg-primary { background-color: var(--primary); }
+    .text-primary { color: var(--primary); }
+    .border-primary { border-color: var(--primary); }
+    .ring-primary { --tw-ring-color: var(--primary); }
+    .hover-bg-primary:hover { background-color: var(--primary); opacity: 0.9; }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+  `}</style>
+);
 
-    <script type="text/babel">
-        // TODO: Código React completo conforme enviado pelo usuário
-        // O conteúdo foi mantido conforme fornecido.
-        ...
-    </script>
-</body>
-</html>
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [view, setView] = useState('dashboard');
+  const [settings, setSettings] = useState({
+    siteName: 'Portal Ministerial',
+    primaryColor: '#3b82f6',
+    logoUrl: '',
+    modules: { events: true, attendance: true }
+  });
+
+  const [allUsers, setAllUsers] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [authError, setAuthError] = useState('');
+  const [isAuthProcessing, setIsAuthProcessing] = useState(false);
+
+  // --- REGRA 3: Autenticação antes de Consultas ---
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else if (!auth.currentUser) {
+          try { await signInAnonymously(auth); } catch (e) {}
+        }
+        setIsAuthReady(true);
+      } catch (err) {
+        console.error("Auth init failed:", err);
+        setIsAuthReady(true);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // --- Listeners de Dados ---
+  useEffect(() => {
+    if (!isAuthReady || !user) return;
+
+    const profileRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid);
+    const unsubProfile = onSnapshot(profileRef, (snap) => {
+      if (snap.exists()) setUserProfile(snap.data());
+      else setUserProfile(null);
+      setLoading(false);
+    }, (err) => {
+      console.error("Profile listener error:", err);
+      setLoading(false);
+    });
+
+    const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general');
+    const unsubSettings = onSnapshot(settingsRef, (snap) => {
+      if (snap.exists()) setSettings(snap.data());
+    });
+
+    const usersCol = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+    const unsubUsers = onSnapshot(usersCol, (snap) => {
+      setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    const eventsCol = collection(db, 'artifacts', appId, 'public', 'data', 'events');
+    const unsubEvents = onSnapshot(eventsCol, (snap) => {
+      setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    const attendanceCol = collection(db, 'artifacts', appId, 'public', 'data', 'attendance');
+    const unsubAttendance = onSnapshot(attendanceCol, (snap) => {
+      setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    const deptsCol = collection(db, 'artifacts', appId, 'public', 'data', 'departments');
+    const unsubDepts = onSnapshot(deptsCol, (snap) => {
+      setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => {
+      unsubProfile(); unsubSettings(); unsubUsers(); unsubEvents(); unsubAttendance(); unsubDepts();
+    };
+  }, [isAuthReady, user]);
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    setUserProfile(null);
+    try { await signInAnonymously(auth); } catch (e) {}
+    setView('dashboard');
+  };
+
+  const notifications = useMemo(() => {
+    if (!userProfile) return [];
+    return events.filter(e => e.scaleStatus === 'ready' && attendance.some(a => a.eventId === e.id && a.userId === userProfile.uid));
+  }, [events, attendance, userProfile]);
+
+  if (loading && user && userProfile) return (
+    <div className="h-screen flex items-center justify-center bg-gray-50 text-center p-6">
+      <div className="flex flex-col items-center gap-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest uppercase">A Carregar Sistema...</p>
+      </div>
+    </div>
+  );
+
+  if (!user || !userProfile) {
+    return (
+      <AuthScreen 
+        onLogin={async (e) => {
+          e.preventDefault();
+          setAuthError('');
+          setIsAuthProcessing(true);
+          const nameInput = e.target.name.value.trim();
+          const passwordInput = e.target.password.value;
+          try {
+            const usersCol = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+            const snap = await getDocs(usersCol);
+            const userFound = snap.docs.map(d => d.data()).find(u => u.name?.trim().toLowerCase() === nameInput.toLowerCase());
+            if (!userFound || !userFound.email) {
+              setAuthError('Utilizador não encontrado.');
+              setIsAuthProcessing(false);
+              return;
+            }
+            await signInWithEmailAndPassword(auth, userFound.email, passwordInput);
+          } catch (err) {
+            setAuthError('Senha incorreta ou erro de acesso.');
+          } finally {
+            setIsAuthProcessing(false);
+          }
+        }} 
+        onRegister={async (e) => {
+          e.preventDefault();
+          setAuthError('');
+          setIsAuthProcessing(true);
+          const { password, name, phone, unidadeType, regionalName, setorName, congregacaoName } = e.target.elements;
+          if (password.value.length < 6) {
+            setAuthError('A senha deve ter pelo menos 6 caracteres.');
+            setIsAuthProcessing(false);
+            return;
+          }
+          try {
+            const usersCol = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+            const snap = await getDocs(usersCol);
+            if (snap.docs.some(d => d.data().name?.trim().toLowerCase() === name.value.trim().toLowerCase())) {
+              setAuthError('Este nome já está registrado.');
+              setIsAuthProcessing(false);
+              return;
+            }
+            const generatedEmail = `${name.value.replace(/\s+/g, '').toLowerCase()}_${Date.now()}@portal.com`;
+            const res = await createUserWithEmailAndPassword(auth, generatedEmail, password.value);
+            const isFirst = snap.empty;
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', res.user.uid), {
+              uid: res.user.uid, name: name.value, email: generatedEmail, phone: phone.value, unidadeType: unidadeType.value,
+              regionalName: regionalName?.value || "", setorName: setorName?.value || "", congregacaoName: congregacaoName?.value || "",
+              status: isFirst ? 'active' : 'pending', role: isFirst ? 'master' : 'user', isAdmin: isFirst, isAvailable: true,
+              joinDate: new Date().toISOString(), participatingDepts: []
+            });
+          } catch (err) { 
+            setAuthError('Erro ao criar conta. Tente novamente.');
+          } finally {
+            setIsAuthProcessing(false);
+          }
+        }} 
+        onAdminLogin={async (e) => {
+          e.preventDefault();
+          setAuthError('');
+          if (e.target.adminPassword.value === '123') {
+            setIsAuthProcessing(true);
+            try {
+              let current = auth.currentUser;
+              if (!current) current = (await signInAnonymously(auth)).user;
+              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', current.uid), {
+                uid: current.uid, name: "Admin Master", email: "master@portal.com", role: 'master', status: 'active', isAdmin: true, 
+                isAvailable: true, department: "Diretoria", joinDate: new Date().toISOString(), participatingDepts: []
+              });
+            } catch (err) {
+              setAuthError('Erro ao configurar acesso administrativo.');
+            } finally {
+              setIsAuthProcessing(false);
+            }
+          } else { 
+            setAuthError('Senha de mestre inválida.'); 
+          }
+        }} 
+        error={authError} 
+        isProcessing={isAuthProcessing} 
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden">
+      <CustomStyles primaryColor={settings.primaryColor} />
+      
+      <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white border-r transition-all duration-300 flex flex-col z-30 shadow-sm`}>
+        <div className="h-20 flex items-center px-6 border-b overflow-hidden gap-3 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-black shrink-0 shadow-lg overflow-hidden text-sm uppercase">
+            {settings.logoUrl ? <img src={settings.logoUrl} className="w-full h-full object-cover" /> : settings.siteName.charAt(0)}
+          </div>
+          {isSidebarOpen && <span className="font-bold text-lg truncate text-primary uppercase tracking-tighter">{settings.siteName}</span>}
+        </div>
+
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto scrollbar-hide">
+          <NavItem active={view === 'dashboard'} icon={<LayoutDashboard size={20}/>} label="Dashboard" onClick={() => setView('dashboard')} open={isSidebarOpen} />
+          <NavItem active={view === 'agenda'} icon={<BookOpen size={20}/>} label="Agenda Ministerial" onClick={() => setView('agenda')} open={isSidebarOpen} />
+          <NavItem active={view === 'congressos'} icon={<Trophy size={20}/>} label="Congressos" onClick={() => setView('congressos')} open={isSidebarOpen} />
+          <NavItem active={view === 'my_depts'} icon={<Layers size={20}/>} label="Departamentos" onClick={() => setView('my_depts')} open={isSidebarOpen} />
+
+          {userProfile.isAdmin && (
+            <div className="pt-6 border-t mt-4">
+              {isSidebarOpen && <p className="px-4 mb-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Master</p>}
+              <NavItem active={view === 'events_admin'} icon={<Calendar size={20}/>} label="Gestão Eventos" onClick={() => setView('events_admin')} open={isSidebarOpen} />
+              <NavItem active={view === 'users'} icon={<Users size={20}/>} label="Membros" onClick={() => setView('users')} open={isSidebarOpen} />
+              <NavItem active={view === 'depts_admin'} icon={<Briefcase size={20}/>} label="Frentes de Trabalho" onClick={() => setView('depts_admin')} open={isSidebarOpen} />
+              <NavItem active={view === 'reports'} icon={<BarChart3 size={20}/>} label="Relatórios & BI" onClick={() => setView('reports')} open={isSidebarOpen} />
+              <NavItem active={view === 'settings'} icon={<Settings size={20}/>} label="Personalizar" onClick={() => setView('settings')} open={isSidebarOpen} />
+            </div>
+          )}
+        </nav>
+
+        <div className="p-4 border-t">
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 text-red-500 hover:bg-red-50 rounded-xl transition font-black text-[10px] uppercase">
+            <LogOut size={20} /> {isSidebarOpen && "Sair"}
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 flex flex-col min-w-0">
+        <header className="h-20 bg-white border-b px-8 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors"><Menu size={20} /></button>
+            {notifications.length > 0 && (
+              <div className="flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-full animate-bounce">
+                <Bell size={14} className="text-primary" />
+                <span className="text-[9px] font-black text-primary uppercase">Escalas Prontas!</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-right">
+            <div className="hidden sm:block">
+              <p className="text-sm font-bold leading-none">{userProfile.name}</p>
+              <p className="text-[10px] text-gray-400 uppercase font-black mt-1">{userProfile.role}</p>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-gray-50 border flex items-center justify-center text-gray-400 shadow-inner"><UserCircle size={24} /></div>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-8">
+          {view === 'dashboard' && <Dashboard userProfile={userProfile} attendance={attendance} events={events} notifications={notifications} />}
+          {(view === 'agenda' || view === 'congressos') && (
+            <AgendaMinisterial 
+              events={events} 
+              attendance={attendance} 
+              userProfile={userProfile} 
+              departments={departments} 
+              category={view === 'agenda' ? "Agenda Ministerial" : "Congressos"} 
+            />
+          )}
+          {view === 'my_depts' && <UserDepartments departments={departments} userProfile={userProfile} />}
+          
+          {userProfile.isAdmin && (
+            <>
+              {view === 'events_admin' && <EventsManagement events={events} attendance={attendance} departments={departments} allUsers={allUsers} />}
+              {view === 'depts_admin' && <DepartmentsManagement departments={departments} />}
+              {view === 'users' && <MembersManagement allUsers={allUsers} userProfile={userProfile} departments={departments} />}
+              {view === 'reports' && <ReportsView attendance={attendance} events={events} allUsers={allUsers} departments={departments} />}
+              {view === 'settings' && <SettingsView settings={settings} onUpdate={s => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), s)} />}
+            </>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// --- SUB-COMPONENTS ---
+
+function Dashboard({ userProfile, attendance, events, notifications }) {
+  const [month, setMonth] = useState(new Date().getMonth());
+  const [year, setYear] = useState(new Date().getFullYear());
+
+  const filteredAtt = useMemo(() => {
+    return attendance.filter(a => {
+      const d = new Date(a.timestamp);
+      return a.userId === userProfile.uid && d.getMonth() === Number(month) && d.getFullYear() === Number(year);
+    });
+  }, [attendance, userProfile.uid, month, year]);
+
+  const stats = {
+    available: filteredAtt.filter(a => a.status === 'present').length,
+    unavailable: filteredAtt.filter(a => a.status === 'absent').length,
+    escalated: filteredAtt.filter(a => a.isEscalated).length,
+    pending: events.filter(e => new Date(e.date) > new Date()).length
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h1 className="text-3xl font-black text-gray-800 tracking-tighter uppercase leading-none">Meu Resumo</h1>
+        <div className="flex gap-2 bg-white p-2 rounded-2xl border shadow-sm">
+          <select value={month} onChange={e => setMonth(e.target.value)} className="bg-transparent text-xs font-black uppercase outline-none px-2 cursor-pointer">
+            {["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"].map((m, i) => <option key={i} value={i}>{m}</option>)}
+          </select>
+          <select value={year} onChange={e => setYear(e.target.value)} className="bg-transparent text-xs font-black uppercase outline-none px-2 cursor-pointer">
+            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title="Disponível" value={stats.available} icon={<CheckCircle/>} color="text-green-500" />
+        <StatCard title="Indisponível" value={stats.unavailable} icon={<XCircle/>} color="text-red-500" />
+        <StatCard title="Vezes Escalado" value={stats.escalated} icon={<ClipboardCheck/>} color="text-purple-500" />
+        <StatCard title="Total Futuros" value={stats.pending} icon={<Clock/>} color="text-blue-500" />
+      </div>
+
+      <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm">
+        <h2 className="text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-primary"><FileText /> Histórico</h2>
+        <div className="divide-y divide-gray-50">
+          {filteredAtt.map(a => (
+            <div key={a.id} className="py-4 flex justify-between items-center group">
+              <div>
+                <p className="font-bold text-gray-800 uppercase text-xs tracking-tight">{a.eventName}</p>
+                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{a.servingDept} • {new Date(a.timestamp).toLocaleDateString()}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                 {a.isEscalated && <span className="bg-purple-100 text-purple-600 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest animate-pulse">Escalado</span>}
+                 <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                    {a.status === 'present' ? "Disponível" : "Indisponível"}
+                 </span>
+              </div>
+            </div>
+          ))}
+          {filteredAtt.length === 0 && <p className="text-center py-10 text-gray-300 font-bold uppercase text-xs tracking-widest leading-relaxed">Sem atividades registradas no período.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AgendaMinisterial({ events, attendance, userProfile, departments, category }) {
+  const [activeTab, setActiveTab] = useState('semanal');
+  const [expandedEvent, setExpandedEvent] = useState(null);
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+
+  const filteredEvents = useMemo(() => {
+    return events.filter(ev => {
+      const d = new Date(ev.date);
+      const day = d.getUTCDay();
+      const monthMatch = d.getUTCMonth() === Number(filterMonth);
+      const yearMatch = d.getUTCFullYear() === Number(filterYear);
+      const categoryMatch = ev.category === category || (!ev.category && category === "Agenda Ministerial");
+      if (!monthMatch || !yearMatch || !categoryMatch) return false;
+      if (activeTab === 'sábados') return day === 6;
+      if (activeTab === 'domingos') return day === 0;
+      return day !== 0 && day !== 6;
+    }).sort((a,b) => new Date(a.date) - new Date(b.date));
+  }, [events, activeTab, filterMonth, filterYear, category]);
+
+  const markAvailability = async (event, dept) => {
+    const attId = `${event.id}_${userProfile.uid}`;
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), {
+      id: attId, eventId: event.id, eventName: event.name, eventDate: event.date, eventCategory: category,
+      userId: userProfile.uid, userName: userProfile.name, servingDept: dept.name,
+      status: 'present', isEscalated: false, timestamp: new Date().toISOString()
+    });
+    setExpandedEvent(null);
+  };
+
+  const markAbsence = async (event) => {
+    const attId = `${event.id}_${userProfile.uid}`;
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), {
+      id: attId, eventId: event.id, eventName: event.name, eventDate: event.date, eventCategory: category,
+      userId: userProfile.uid, userName: userProfile.name, servingDept: 'INDISPONÍVEL',
+      status: 'absent', isEscalated: false, timestamp: new Date().toISOString()
+    });
+    setExpandedEvent(null);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in pb-12">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h1 className="text-3xl font-black text-gray-800 tracking-tighter uppercase leading-none">{category}</h1>
+        <div className="flex gap-2 bg-white p-2 rounded-2xl border shadow-sm">
+          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent text-xs font-black uppercase px-2 outline-none cursor-pointer">
+            {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((m, i) => <option key={i} value={i}>{m}</option>)}
+          </select>
+          <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="bg-transparent text-xs font-black uppercase px-2 outline-none cursor-pointer">
+            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex gap-2 bg-white p-1 rounded-2xl border shadow-sm w-fit overflow-x-auto max-w-full scrollbar-hide">
+        {['semanal', 'sábados', 'domingos'].map(t => (
+          <button key={t} onClick={() => setActiveTab(t)} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeTab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>{t}</button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredEvents.map(ev => {
+          const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
+          const isExpanded = expandedEvent === ev.id;
+          const evDate = new Date(ev.date);
+          const isReady = ev.scaleStatus === 'ready';
+          
+          return (
+            <div key={ev.id} className={`bg-white rounded-[2.5rem] border p-6 shadow-sm hover:border-primary transition-all flex flex-col group relative overflow-hidden ${isReady && myAtt?.isEscalated ? 'ring-4 ring-green-400 ring-offset-2' : ''}`}>
+              <div className="flex items-center gap-4 mb-6">
+                <div className={`flex flex-col items-center justify-center text-white rounded-2xl w-16 h-16 shrink-0 shadow-lg ${isReady ? 'bg-gray-800' : 'bg-primary shadow-blue-100'}`}>
+                  <span className="text-2xl font-black leading-none">{evDate.getUTCDate()}</span>
+                  <span className="text-[9px] font-black uppercase tracking-tighter">
+                    {evDate.toLocaleDateString('pt-PT', { month: 'short', timeZone: 'UTC' }).replace('.', '')}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1 text-primary font-black text-xl leading-none tracking-tighter">
+                    <Clock size={18} strokeWidth={3} className="shrink-0" />
+                    {ev.time}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest truncate">{ev.period}</p>
+                    {isReady && <span className="bg-green-100 text-green-600 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest">Escala Pronta</span>}
+                  </div>
+                </div>
+              </div>
+
+              <h3 className="text-lg font-black leading-tight uppercase group-hover:text-primary transition mb-2 tracking-tighter text-gray-700">{ev.name}</h3>
+              <div className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase mb-6 tracking-widest opacity-70">
+                <Building size={14} className="text-primary"/> {ev.location}
+              </div>
+
+              {isReady ? (
+                <div className="mt-auto pt-4 border-t border-gray-50 animate-in zoom-in">
+                   {myAtt?.isEscalated ? (
+                      <div className="bg-green-50 border-2 border-green-200 p-4 rounded-2xl text-center">
+                         <p className="text-[9px] font-black text-green-600 uppercase mb-1 tracking-widest">Estás escalado! ✅</p>
+                         <p className="font-black uppercase text-sm text-green-800">{myAtt.servingDept}</p>
+                      </div>
+                   ) : (
+                      <div className="bg-gray-50 p-4 rounded-2xl text-center opacity-60 grayscale">
+                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-relaxed">Escala concluída. <br/>Não escalado nesta data.</p>
+                      </div>
+                   )}
+                </div>
+              ) : myAtt && !isExpanded ? (
+                <div className="space-y-3 mt-auto">
+                  <div className={`p-4 rounded-2xl border text-center ${myAtt.status === 'present' ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+                    <p className={`text-[9px] font-black uppercase mb-1 ${myAtt.status === 'present' ? 'text-green-600' : 'text-red-600'}`}>
+                      {myAtt.status === 'present' ? 'Status: Disponível em' : 'Status: Indisponível'}
+                    </p>
+                    <p className={`font-black uppercase text-sm ${myAtt.status === 'present' ? 'text-green-700' : 'text-red-700'}`}>{myAtt.servingDept}</p>
+                  </div>
+                  <button onClick={() => setExpandedEvent(ev.id)} className="w-full text-[9px] font-black text-primary uppercase py-3 border-2 border-primary/10 rounded-xl tracking-widest transition-all hover:bg-primary/5 active:scale-95">Alterar Resposta</button>
+                </div>
+              ) : isExpanded ? (
+                <div className="space-y-3 animate-in slide-in-from-top-2 mt-auto">
+                  <p className="text-[10px] font-black text-primary uppercase text-center mb-2 tracking-widest border-b pb-2">Onde vais servir?</p>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto scrollbar-hide pr-1">
+                    {departments.filter(d => userProfile.participatingDepts?.includes(d.id) || userProfile.role === 'master').map(d => (
+                      <button key={d.id} onClick={() => markAvailability(ev, d)} style={{ borderColor: d.color, color: d.color }} className="p-2 bg-white border-2 rounded-xl text-[9px] font-black uppercase text-center hover:bg-gray-50 active:scale-95 transition-all">{d.name}</button>
+                    ))}
+                    <button onClick={() => markAbsence(ev)} className="col-span-2 p-3 bg-red-50 border-2 border-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition-colors">Indisponível</button>
+                  </div>
+                  <button onClick={() => setExpandedEvent(null)} className="w-full text-[9px] font-black text-gray-300 uppercase mt-2 hover:text-red-500 transition-colors">Cancelar</button>
+                </div>
+              ) : (
+                <button onClick={() => setExpandedEvent(ev.id)} className="w-full py-5 bg-primary text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-blue-100 transition-all hover:scale-[1.02] active:scale-95 mt-auto">Dar Disponibilidade</button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function UserDepartments({ departments, userProfile }) {
+  const myDepts = useMemo(() => {
+    return departments.filter(d => userProfile.participatingDepts?.includes(d.id));
+  }, [departments, userProfile.participatingDepts]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in pb-12">
+      <h1 className="text-3xl font-black text-gray-800 tracking-tighter uppercase leading-none">Minhas Frentes</h1>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {myDepts.map(d => (
+          <div key={d.id} className="bg-white p-8 rounded-[2.5rem] border-l-8 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow" style={{ borderLeftColor: d.color }}>
+            <div className="flex justify-between items-start mb-6">
+              <div className="p-3 rounded-2xl overflow-hidden" style={{ backgroundColor: `${d.color}20`, color: d.color }}>
+                 {d.icon && d.icon.startsWith('data:image') ? <img src={d.icon} className="w-8 h-8 object-cover" alt="Icon" /> : <Briefcase size={24} />}
+              </div>
+              <span className="text-[10px] font-black text-green-500 uppercase tracking-widest">Membro Ativo</span>
+            </div>
+            <h3 className="text-xl font-black uppercase tracking-tight mb-2 leading-none text-gray-700">{d.name}</h3>
+            <p className="text-[10px] font-black text-primary uppercase mb-4 tracking-widest leading-none">Líder: {d.leader}</p>
+            <p className="text-xs text-gray-400 font-medium leading-relaxed">{d.description}</p>
+          </div>
+        ))}
+        {myDepts.length === 0 && <div className="col-span-full py-20 text-center"><p className="text-gray-400 font-black uppercase text-xs tracking-widest">Nenhum departamento vinculado.</p></div>}
+      </div>
+    </div>
+  );
+}
+
+// --- MASTER VIEWS ---
+
+function EventsManagement({ events, attendance, departments, allUsers }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [m, setM] = useState(new Date().getMonth());
+  const [y, setY] = useState(new Date().getFullYear());
+  const [scaleBuildingState, setScaleBuildingState] = useState(null); 
+  const [availabilityView, setAvailabilityView] = useState(null); 
+
+  const uniqueTitles = useMemo(() => [...new Set(events.map(e => e.name))].sort(), [events]);
+  const uniquePeriods = useMemo(() => [...new Set(events.map(e => e.period))].sort(), [events]);
+  const uniqueLocations = useMemo(() => [...new Set(events.map(e => e.location))].sort(), [events]);
+
+  const filteredEvents = useMemo(() => {
+    return events.filter(ev => {
+      const d = new Date(ev.date);
+      return d.getUTCMonth() === Number(m) && d.getUTCFullYear() === Number(y);
+    }).sort((a,b) => new Date(a.date) - new Date(b.date));
+  }, [events, m, y]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const payload = {
+      name: data.get('name'), date: data.get('date'), time: data.get('time'),
+      period: data.get('period'), location: data.get('location'), type: data.get('type'),
+      category: data.get('category'),
+      scaleStatus: editing?.scaleStatus || 'draft',
+      finalizedDepts: editing?.finalizedDepts || []
+    };
+    if (editing) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editing.id), payload);
+    else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), { ...payload, scaleStatus: 'draft', finalizedDepts: [] });
+    setEditing(null); setShowAdd(false);
+  };
+
+  const toggleScaleEscalated = async (attDoc) => {
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attDoc.id), {
+      isEscalated: !attDoc.isEscalated
+    });
+  };
+
+  const toggleDeptFinalized = async (event, deptId) => {
+    const finalized = event.finalizedDepts || [];
+    const newFinalized = finalized.includes(deptId) ? finalized.filter(id => id !== deptId) : [...finalized, deptId];
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', event.id), { finalizedDepts: newFinalized });
+    setScaleBuildingState(prev => prev ? ({ ...prev, event: { ...prev.event, finalizedDepts: newFinalized } }) : null);
+  };
+
+  const markScaleReady = async (eventId, readyStatus) => {
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', eventId), { scaleStatus: readyStatus ? 'ready' : 'draft' });
+    setScaleBuildingState(null);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in pb-12">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h2 className="text-2xl font-black uppercase tracking-tighter leading-none text-primary">Cronograma</h2>
+        <div className="flex gap-3">
+          <div className="flex gap-2 bg-white p-2 rounded-2xl border shadow-sm">
+            <select value={m} onChange={e => setM(e.target.value)} className="bg-transparent text-[10px] font-black uppercase outline-none px-2 cursor-pointer">
+              {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((mn, i) => <option key={i} value={i}>{mn}</option>)}
+            </select>
+            <select value={y} onChange={e => setY(e.target.value)} className="bg-transparent text-[10px] font-black uppercase outline-none px-2 cursor-pointer">
+              {[2024, 2025, 2026].map(yr => <option key={yr} value={yr}>{yr}</option>)}
+            </select>
+          </div>
+          <button onClick={() => setShowAdd(true)} className="bg-primary text-white p-4 rounded-2xl font-black shadow-lg flex items-center gap-2 transition hover:scale-105 active:scale-95 uppercase text-xs tracking-widest"><Plus size={20}/> Novo</button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[2.5rem] border overflow-hidden shadow-sm overflow-x-auto scrollbar-hide">
+        <table className="w-full text-left min-w-[800px]">
+          <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b">
+            <tr>
+              <th className="px-8 py-4">Evento / Categoria</th>
+              <th className="px-8 py-4 text-center">Interação</th>
+              <th className="px-8 py-4 text-center">Escala</th>
+              <th className="px-8 py-4 text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {filteredEvents.map(ev => {
+              const eventAtts = attendance.filter(a => a.eventId === ev.id && a.status === 'present');
+              return (
+                <tr key={ev.id} className="hover:bg-gray-50/50 transition group">
+                  <td className="px-8 py-4">
+                     <p className="font-black text-sm uppercase tracking-tight leading-none text-gray-700">{ev.name}</p>
+                     <div className="flex items-center gap-2 mt-1">
+                        <span className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest ${ev.category === 'Congressos' ? 'bg-orange-100 text-orange-600 shadow-sm shadow-orange-50' : 'bg-blue-100 text-blue-600 shadow-sm shadow-blue-50'}`}>
+                          {ev.category || "Agenda Ministerial"}
+                        </span>
+                     </div>
+                     <p className="text-[9px] font-bold text-gray-400 uppercase mt-1 tracking-widest">{new Date(ev.date).toLocaleDateString('pt-PT', {timeZone: 'UTC'})} às {ev.time}</p>
+                  </td>
+                  <td className="px-8 py-4 text-center">
+                     <button 
+                       onClick={() => setAvailabilityView(ev)}
+                       className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-100 rounded-xl hover:bg-blue-100 transition-colors shadow-sm"
+                     >
+                       <UserCheck size={14} className="text-primary" />
+                       <span className="text-[10px] font-black uppercase text-primary tracking-tighter">{eventAtts.length} voluntários</span>
+                     </button>
+                  </td>
+                  <td className="px-8 py-4 text-center">
+                     <div className="flex items-center justify-center gap-2">
+                       <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${ev.scaleStatus === 'ready' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
+                          {ev.scaleStatus === 'ready' ? 'Pronta ✅' : 'Pendente ✍️'}
+                       </span>
+                       <button onClick={() => setScaleBuildingState({ event: ev, step: 'depts' })} className="text-primary hover:underline text-[10px] font-black uppercase ml-2 flex items-center gap-1 transition-all active:scale-95">
+                          <ClipboardList size={14} /> Montar
+                       </button>
+                     </div>
+                  </td>
+                  <td className="px-8 py-4 text-right">
+                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => setEditing(ev)} className="p-2 text-gray-400 hover:text-primary transition active:scale-90"><Edit2 size={18}/></button>
+                      <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id))} className="p-2 text-gray-400 hover:text-red-500 transition active:scale-90"><Trash2 size={18}/></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {availabilityView && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in flex flex-col max-h-[90vh]">
+            <div className="p-8 border-b bg-gray-50 flex justify-between items-center shrink-0">
+              <div>
+                <h2 className="text-2xl font-black uppercase tracking-tighter leading-none text-gray-700">Equipe</h2>
+                <p className="text-[10px] font-black text-gray-400 uppercase mt-2 tracking-widest">{availabilityView.name}</p>
+              </div>
+              <button onClick={() => setAvailabilityView(null)} className="p-3 bg-white rounded-full shadow-sm hover:text-red-500 transition-all"><X size={24} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-8 space-y-10 scrollbar-hide">
+               <section>
+                  <div className="flex items-center gap-2 mb-4 border-b border-green-100 pb-2">
+                    <CheckCircle className="text-green-500" size={18} />
+                    <h3 className="text-sm font-black uppercase text-green-700 tracking-widest">Disponíveis</h3>
+                  </div>
+                  <div className="space-y-4">
+                    {departments.map(dept => {
+                      const members = attendance.filter(a => a.eventId === availabilityView.id && a.servingDept === dept.name && a.status === 'present');
+                      if (members.length === 0) return null;
+                      return (
+                        <div key={dept.id} className="bg-green-50/20 rounded-2xl p-4 border border-green-50 shadow-sm shadow-green-100/20">
+                           <h4 className="text-[10px] font-black uppercase text-gray-400 mb-2">{dept.name} ({members.length})</h4>
+                           <div className="flex flex-wrap gap-2">
+                              {members.map(m => (
+                                <div key={m.id} className="px-3 py-1.5 bg-white rounded-lg border border-green-50 flex items-center gap-2 shadow-sm">
+                                   <UserCircle size={14} className="text-green-400"/>
+                                   <span className="text-[10px] font-bold text-gray-600 uppercase">{m.userName}</span>
+                                </div>
+                              ))}
+                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+               </section>
+               <section>
+                  <div className="flex items-center gap-2 mb-4 border-b border-red-100 pb-2">
+                    <XCircle className="text-red-500" size={18} />
+                    <h3 className="text-sm font-black uppercase text-red-700 tracking-widest">Indisponíveis</h3>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {attendance.filter(a => a.eventId === availabilityView.id && a.status === 'absent').map(a => (
+                       <div key={a.id} className="p-3 bg-red-50/50 rounded-xl border border-red-50 flex items-center gap-3 opacity-70">
+                          <UserMinus size={12} className="text-red-400"/>
+                          <span className="text-[9px] font-bold text-red-800 uppercase line-through truncate">{a.userName}</span>
+                       </div>
+                    ))}
+                  </div>
+               </section>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {scaleBuildingState && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in flex flex-col max-h-[90vh]">
+            <div className="p-8 border-b bg-gray-50 flex justify-between items-center shrink-0">
+              <div>
+                <h2 className="text-2xl font-black uppercase tracking-tighter leading-none text-gray-700">
+                  {scaleBuildingState.step === 'depts' ? "Gerenciar Frentes" : `Definindo: ${scaleBuildingState.dept.name}`}
+                </h2>
+                <p className="text-[10px] font-black text-gray-400 uppercase mt-2 tracking-widest">{scaleBuildingState.event.name}</p>
+              </div>
+              <button onClick={() => setScaleBuildingState(null)} className="p-3 bg-white rounded-full shadow-sm hover:text-red-500 transition-all"><X size={24} /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
+              {scaleBuildingState.step === 'depts' ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {departments.map(dept => {
+                      const isFinalized = scaleBuildingState.event.finalizedDepts?.includes(dept.id);
+                      return (
+                        <div key={dept.id} className="relative group">
+                          <button 
+                            onClick={() => setScaleBuildingState({ ...scaleBuildingState, dept, step: 'members' })}
+                            className={`w-full p-6 rounded-[2rem] border-2 transition-all text-left flex items-center gap-4 ${isFinalized ? 'border-green-200 bg-green-50/50' : 'border-transparent bg-gray-50 hover:border-primary'}`}
+                          >
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: `${dept.color}20`, color: dept.color }}>
+                               {dept.icon && dept.icon.startsWith('data:image') ? <img src={dept.icon} className="w-full h-full object-cover rounded-xl" /> : <Briefcase size={20}/>}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-black uppercase text-xs tracking-tight text-gray-700">{dept.name}</p>
+                              <p className="text-[9px] font-bold text-gray-400 uppercase mt-0.5">Gerenciar Voluntários</p>
+                            </div>
+                          </button>
+                          
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); toggleDeptFinalized(scaleBuildingState.event, dept.id); }}
+                            className={`absolute top-4 right-4 p-1.5 rounded-lg transition-all shadow-sm ${isFinalized ? 'text-green-600 bg-green-100' : 'text-gray-300 bg-white hover:text-primary active:scale-90'}`}
+                          >
+                            {isFinalized ? <CheckSquare size={18} /> : <Square size={18} />}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="pt-8 border-t flex flex-col items-center gap-4 text-center">
+                    <button 
+                       onClick={() => markScaleReady(scaleBuildingState.event.id, scaleBuildingState.event.scaleStatus !== 'ready')}
+                       className={`w-full py-5 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl transition-all hover:scale-[1.01] ${scaleBuildingState.event.scaleStatus === 'ready' ? 'bg-orange-500 text-white' : 'bg-green-600 text-white'}`}
+                    >
+                      {scaleBuildingState.event.scaleStatus === 'ready' ? "Reabrir Edição da Escala" : "Escala Pronta - Notificar todos os membros"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <button onClick={() => setScaleBuildingState({ ...scaleBuildingState, step: 'depts' })} className="flex items-center gap-2 text-[10px] font-black text-primary uppercase mb-4 transition-colors hover:text-primary/60"><ChevronDown className="rotate-90" size={14} /> Voltar</button>
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest border-b pb-2 text-center">Selecione para Escalar:</p>
+                    {attendance.filter(a => a.eventId === scaleBuildingState.event.id && a.servingDept === scaleBuildingState.dept.name && a.status === 'present').map(att => (
+                      <div key={att.id} className={`p-4 bg-white border-2 rounded-2xl flex items-center justify-between transition-all ${att.isEscalated ? 'border-green-200 bg-green-50/20 shadow-sm shadow-green-50' : 'border-gray-100 bg-gray-50/20'}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black uppercase transition-colors ${att.isEscalated ? 'bg-green-500 shadow-md shadow-green-100' : 'bg-gray-300 grayscale'}`}>{att.userName.charAt(0)}</div>
+                          <div><p className="font-black uppercase text-sm tracking-tight">{att.userName}</p><p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{att.isEscalated ? 'Confirmado na Escala' : 'Aguardando'}</p></div>
+                        </div>
+                        <button onClick={() => toggleScaleEscalated(att)} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${att.isEscalated ? 'bg-green-600 text-white shadow-md' : 'bg-primary text-white shadow-md active:scale-95'}`}>{att.isEscalated ? "Retirar" : "Escalar"}</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(showAdd || editing) && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSave} className="bg-white p-8 rounded-[3rem] w-full max-w-md space-y-4 animate-in zoom-in shadow-2xl">
+            <h2 className="text-2xl font-black uppercase tracking-tighter leading-none">{editing ? "Editar" : "Novo"}</h2>
+            <div className="space-y-4">
+               <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase mb-2 block tracking-widest text-primary">Tipo de Evento</label>
+                  <select name="category" defaultValue={editing?.category || 'Agenda Ministerial'} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition cursor-pointer">
+                    <option value="Agenda Ministerial">Agenda Ministerial</option>
+                    <option value="Congressos">Congressos</option>
+                  </select>
+               </div>
+              <input name="name" list="titles" defaultValue={editing?.name} placeholder="Nome do Evento" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+              <datalist id="titles">{uniqueTitles.map(t => <option value={t} key={t} />)}</datalist>
+              <div className="grid grid-cols-2 gap-2">
+                <input name="date" type="date" defaultValue={editing?.date} required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+                <input name="time" type="time" defaultValue={editing?.time} required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input name="period" list="periods" defaultValue={editing?.period} placeholder="Período" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+                <datalist id="periods">{uniquePeriods.map(p => <option value={p} key={p} />)}</datalist>
+                <select name="type" defaultValue={editing?.type || 'semanal'} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none cursor-pointer">
+                  <option value="semanal">Fixo Semanal</option>
+                  <option value="sábados">Sábados</option>
+                  <option value="domingos">Domingos</option>
+                </select>
+              </div>
+              <input name="location" list="locations" defaultValue={editing?.location} placeholder="Localização" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+              <datalist id="locations">{uniqueLocations.map(l => <option value={l} key={l} />)}</datalist>
+            </div>
+            <div className="flex gap-4 pt-4">
+              <button type="button" onClick={() => {setShowAdd(false); setEditing(null)}} className="flex-1 text-xs font-black uppercase text-gray-400 tracking-widest transition-colors hover:text-red-500">Cancelar</button>
+              <button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg tracking-widest transition-transform active:scale-95">Confirmar</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DepartmentsManagement({ departments }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [iconPreview, setIconPreview] = useState('');
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setIconPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const payload = { 
+      name: data.get('name'), leader: data.get('leader'), description: data.get('description'), color: data.get('color'),
+      icon: iconPreview || editing?.icon || ''
+    };
+    if (editing) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'departments', editing.id), payload);
+    else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), payload);
+    setEditing(null); setShowAdd(false); setIconPreview('');
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-black uppercase tracking-tighter leading-none text-primary">Departamentos</h2>
+        <button onClick={() => { setShowAdd(true); setIconPreview(''); }} className="bg-primary text-white p-4 rounded-2xl font-black shadow-lg flex items-center gap-2 transition hover:scale-105 active:scale-95"><Plus size={20}/> Novo</button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {departments.map(d => (
+          <div key={d.id} className="bg-white p-6 rounded-[2rem] border shadow-sm flex items-center justify-between group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden" style={{ backgroundColor: `${d.color}20`, color: d.color }}>
+                {d.icon && d.icon.startsWith('data:image') ? <img src={d.icon} className="w-12 h-12 object-cover" /> : <Briefcase size={24}/>}
+              </div>
+              <div>
+                <h4 className="font-black uppercase text-sm tracking-tight text-gray-700">{d.name}</h4>
+                <p className="text-[10px] font-black text-gray-400 uppercase leading-none mt-1">Líder: {d.leader}</p>
+              </div>
+            </div>
+            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => { setEditing(d); setIconPreview(d.icon); }} className="p-2 text-gray-400 hover:text-primary transition"><Edit2 size={18}/></button>
+              <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'departments', d.id))} className="p-2 text-gray-400 hover:text-red-500 transition"><Trash2 size={18}/></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {(showAdd || editing) && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSave} className="bg-white p-8 rounded-[3rem] w-full max-w-md space-y-4 animate-in zoom-in overflow-y-auto max-h-[90vh]">
+            <h2 className="text-2xl font-black uppercase tracking-tighter leading-none text-gray-700">{editing ? "Editar" : "Novo"}</h2>
+            <div className="flex flex-col items-center gap-4 py-2 border-b">
+              <div className="w-20 h-20 rounded-3xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center relative overflow-hidden group">
+                {iconPreview ? <img src={iconPreview} className="w-full h-full object-cover" alt="Preview" /> : <ImageIcon className="text-gray-300" />}
+                <input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" />
+              </div>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Carregar Ícone</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <input name="name" defaultValue={editing?.name} placeholder="Nome" required className="col-span-2 w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+              <input name="leader" defaultValue={editing?.leader} placeholder="Líder" required className="col-span-2 w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+            </div>
+            <textarea name="description" defaultValue={editing?.description} placeholder="Descrição" className="w-full p-4 bg-gray-50 rounded-2xl font-medium outline-none h-24 border-2 border-transparent focus:border-primary transition" />
+            <div>
+              <label className="text-[9px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Cor</label>
+              <input name="color" type="color" defaultValue={editing?.color || "#3b82f6"} className="w-full h-12 bg-transparent cursor-pointer rounded-xl" />
+            </div>
+            <div className="flex gap-4 pt-4">
+              <button type="button" onClick={() => {setShowAdd(false); setEditing(null); setIconPreview('');}} className="flex-1 text-xs font-black uppercase text-gray-400 tracking-widest transition-colors hover:text-red-500">Cancelar</button>
+              <button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg tracking-widest transition-transform active:scale-95">Salvar</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MembersManagement({ allUsers, userProfile, departments }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingUser, setEditingUser] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [selectedDepts, setSelectedDepts] = useState([]);
+
+  const filtered = useMemo(() => {
+    return allUsers.filter(u => u.name?.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [allUsers, searchTerm]);
+
+  useEffect(() => {
+    if (editingUser) setSelectedDepts(editingUser.participatingDepts || []);
+    else setSelectedDepts([]);
+  }, [editingUser, showAdd]);
+
+  const toggleDept = (id) => {
+    setSelectedDepts(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const payload = {
+      name: data.get('name'), email: data.get('email'), phone: data.get('phone'), 
+      unidadeType: data.get('unidadeType'), regionalName: data.get('regionalName'), 
+      setorName: data.get('setorName'), congregacaoName: data.get('congregacaoName'),
+      role: data.get('role'), status: data.get('status'), isAdmin: data.get('role') !== 'user',
+      isAvailable: data.get('isAvailable') === 'true', participatingDepts: selectedDepts
+    };
+    if (editingUser) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', editingUser.uid), payload);
+    else {
+      const tempUid = crypto.randomUUID();
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', tempUid), { ...payload, uid: tempUid, joinDate: new Date().toISOString() });
+    }
+    setEditingUser(null); setShowAdd(false);
+  };
+
+  return (
+    <div className="space-y-6 pb-12">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h2 className="text-2xl font-black uppercase tracking-tighter leading-none text-primary">Membros</h2>
+        <div className="flex gap-3">
+          <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="p-2 bg-white rounded-xl border border-gray-100 outline-none font-bold text-xs shadow-sm" />
+          <button onClick={() => setShowAdd(true)} className="bg-primary text-white px-6 py-2 rounded-xl font-black shadow-lg uppercase text-[10px] tracking-widest transition hover:scale-105 active:scale-95"><Plus size={16}/> Novo</button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-x-auto scrollbar-hide">
+        <table className="w-full text-left min-w-[700px]">
+          <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b">
+            <tr>
+              <th className="px-8 py-4">Membro / Unidade</th>
+              <th className="px-8 py-4 text-center">Escalável</th>
+              <th className="px-8 py-4 text-center">Conta</th>
+              <th className="px-8 py-4 text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {filtered.map(u => (
+              <tr key={u.uid} className="hover:bg-gray-50/50 transition group">
+                <td className="px-8 py-4">
+                  <p className="font-black text-sm text-gray-700 leading-none">{u.name}</p>
+                  <p className="text-[8px] font-bold text-gray-400 uppercase mt-1 tracking-widest">
+                    {u.unidadeType}: {u.congregacaoName || u.setorName || u.regionalName}
+                  </p>
+                </td>
+                <td className="px-8 py-4 text-center">
+                  <button onClick={async () => await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', u.uid), { isAvailable: !u.isAvailable })} className={`relative inline-flex h-6 w-11 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${u.isAvailable ? 'bg-primary' : 'bg-gray-200'}`}>
+                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${u.isAvailable ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </td>
+                <td className="px-8 py-4 text-center">
+                  <button onClick={async () => await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', u.uid), { status: u.status === 'active' ? 'blocked' : 'active' })}>
+                    <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase shadow-sm ${u.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>{u.status === 'active' ? "Ativo" : "Suspenso"}</span>
+                  </button>
+                </td>
+                <td className="px-8 py-4 text-right">
+                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                      <button onClick={() => setEditingUser(u)} className="p-2 text-gray-400 hover:text-primary transition"><Edit2 size={16}/></button>
+                      {u.role !== 'master' && <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', u.uid))} className="p-2 text-gray-400 hover:text-red-500 transition"><Trash2 size={16}/></button>}
+                    </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {(showAdd || editingUser) && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSave} className="bg-white p-8 rounded-[3rem] w-full max-w-lg space-y-4 animate-in zoom-in shadow-2xl overflow-y-auto max-h-[90vh]">
+            <h2 className="text-2xl font-black uppercase tracking-tighter leading-none">{editingUser ? "Editar Membro" : "Novo Membro"}</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <input name="name" defaultValue={editingUser?.name} placeholder="Nome Completo" required className="col-span-2 w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+              <input name="email" defaultValue={editingUser?.email} type="hidden" />
+              <input name="phone" defaultValue={editingUser?.phone} placeholder="Celular" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+              
+              <select name="role" defaultValue={editingUser?.role || "user"} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none cursor-pointer">
+                <option value="user">Membro</option>
+                <option value="admin">Administrador</option>
+              </select>
+
+              <select name="unidadeType" defaultValue={editingUser?.unidadeType || ""} required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none cursor-pointer">
+                <option value="" disabled>Unidade</option>
+                <option value="Regional">Regional</option>
+                <option value="Setor">Setor</option>
+                <option value="Congregação">Congregação</option>
+              </select>
+
+              <input name="regionalName" defaultValue={editingUser?.regionalName} placeholder="Nome da Regional" required className="col-span-2 w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+              <input name="setorName" defaultValue={editingUser?.setorName} placeholder="Nome do Setor" className="col-span-2 w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+              <input name="congregacaoName" defaultValue={editingUser?.congregacaoName} placeholder="Nome da Congregação" className="col-span-2 w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+
+              <select name="status" defaultValue={editingUser?.status || "active"} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none cursor-pointer">
+                <option value="active">Ativo</option>
+                <option value="pending">Pendente</option>
+                <option value="blocked">Suspenso</option>
+              </select>
+              <select name="isAvailable" defaultValue={editingUser?.isAvailable ? 'true' : 'false'} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none cursor-pointer">
+                <option value="true">Escalável</option>
+                <option value="false">Indisponível</option>
+              </select>
+            </div>
+            <div className="pt-4 border-t border-gray-100">
+              <p className="text-[10px] font-black text-gray-400 uppercase mb-4 tracking-widest">Frentes Autorizadas</p>
+              <div className="grid grid-cols-2 gap-2">
+                {departments.map(d => (
+                  <button key={d.id} type="button" onClick={() => toggleDept(d.id)} className={`p-3 rounded-xl border-2 flex items-center justify-between transition-all ${selectedDepts.includes(d.id) ? 'bg-primary/5 border-primary text-primary' : 'bg-gray-50 border-transparent text-gray-400'}`}>
+                    <span className="text-[9px] font-black uppercase">{d.name}</span>
+                    {selectedDepts.includes(d.id) && <Check size={14} />}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-4 pt-6">
+              <button type="button" onClick={() => {setShowAdd(false); setEditingUser(null)}} className="flex-1 text-xs font-black uppercase text-gray-400 tracking-widest transition-colors hover:text-red-500">Cancelar</button>
+              <button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg tracking-widest transition-transform active:scale-95">Guardar</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReportsView({ attendance, events, allUsers, departments }) {
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+  const [memberSearch, setMemberSearch] = useState('');
+
+  const filteredData = useMemo(() => {
+    return attendance.filter(a => {
+      const d = new Date(a.timestamp);
+      return d.getMonth() === Number(filterMonth) && d.getFullYear() === Number(filterYear);
+    });
+  }, [attendance, filterMonth, filterYear]);
+
+  const stats = useMemo(() => {
+    const total = filteredData.length;
+    const present = filteredData.filter(a => a.status === 'present').length;
+    const agendaAtt = filteredData.filter(a => a.eventCategory === "Agenda Ministerial" || !a.eventCategory);
+    const congressAtt = filteredData.filter(a => a.eventCategory === "Congressos");
+    return {
+      generalRate: total > 0 ? ((present / total) * 100).toFixed(0) : 0,
+      agendaRate: agendaAtt.length > 0 ? ((agendaAtt.filter(a => a.status === 'present').length / agendaAtt.length) * 100).toFixed(0) : 0,
+      congressRate: congressAtt.length > 0 ? ((congressAtt.filter(a => a.status === 'present').length / congressAtt.length) * 100).toFixed(0) : 0,
+      escalated: filteredData.filter(a => a.isEscalated).length
+    };
+  }, [filteredData]);
+
+  const deptStats = useMemo(() => {
+    return departments.map(d => {
+      const deptAtts = filteredData.filter(a => a.servingDept === d.name);
+      const present = deptAtts.filter(a => a.status === 'present').length;
+      return { name: d.name, color: d.color, rate: deptAtts.length > 0 ? ((present / deptAtts.length) * 100).toFixed(0) : 0, count: present };
+    }).sort((a,b) => b.rate - a.rate);
+  }, [filteredData, departments]);
+
+  return (
+    <div className="space-y-8 animate-in fade-in pb-12">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6 border-gray-100">
+        <h2 className="text-3xl font-black uppercase tracking-tighter leading-none text-gray-800">BI Ministerial</h2>
+        <div className="flex gap-2 bg-white p-2 rounded-2xl border shadow-sm">
+          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent text-xs font-black uppercase outline-none px-2 cursor-pointer">
+            {["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"].map((m, i) => <option key={i} value={i}>{m}</option>)}
+          </select>
+          <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="bg-transparent text-xs font-black uppercase outline-none px-2 cursor-pointer">
+            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+         <StatBox title="Engajamento Geral" value={`${stats.generalRate}%`} icon={<PieChart/>} color="text-primary" />
+         <StatBox title="Agenda Ministerial" value={`${stats.agendaRate}%`} icon={<BookOpen/>} color="text-blue-600" />
+         <StatBox title="Congressos" value={`${stats.congressRate}%`} icon={<Trophy/>} color="text-orange-600" />
+         <StatBox title="Membros Escalados" value={stats.escalated} icon={<UserCheck/>} color="text-green-600" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+         <div className="bg-white rounded-[2.5rem] border shadow-sm p-8 flex flex-col">
+            <h3 className="text-lg font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-primary"><SearchCode /> Buscar Voluntário</h3>
+            <input type="text" placeholder="Nome do membro..." className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm mb-4 border-2 border-transparent focus:border-primary shadow-inner" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} />
+            <div className="flex-1 space-y-2 overflow-y-auto max-h-60 scrollbar-hide">
+               {memberSearch && allUsers.filter(u => u.name.toLowerCase().includes(memberSearch.toLowerCase())).map(u => {
+                  const mAtt = filteredData.filter(a => a.userId === u.uid);
+                  const rate = mAtt.length > 0 ? ((mAtt.filter(a => a.status === 'present').length / mAtt.length) * 100).toFixed(0) : 0;
+                  return (
+                    <div key={u.uid} className="p-4 bg-gray-50 rounded-2xl flex justify-between items-center border border-transparent hover:border-primary/10 transition-colors shadow-sm">
+                       <span className="font-bold text-xs uppercase text-gray-600">{u.name}</span>
+                       <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-1 rounded-lg">{rate}% particip.</span>
+                    </div>
+                  );
+               })}
+            </div>
+         </div>
+
+         <div className="bg-white rounded-[2.5rem] border shadow-sm p-8 flex flex-col">
+            <h3 className="text-lg font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-primary"><Briefcase /> Ranking por Departamento</h3>
+            <div className="space-y-4 overflow-y-auto max-h-60 scrollbar-hide pr-1">
+               {deptStats.map(d => (
+                  <div key={d.name} className="p-4 bg-gray-50 rounded-2xl transition-all hover:bg-gray-100">
+                     <div className="flex justify-between items-center mb-2">
+                        <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: d.color }}>{d.name}</span>
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{d.count} serviços</span>
+                     </div>
+                     <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden shadow-inner">
+                        <div className="h-full transition-all duration-1000 ease-out" style={{ width: `${d.rate}%`, backgroundColor: d.color }}></div>
+                     </div>
+                  </div>
+               ))}
+            </div>
+         </div>
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ title, value, icon, color }) {
+  return (
+    <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col items-center justify-center text-center group hover:scale-[1.03] transition-transform duration-300">
+       <div className={`mb-3 p-3 bg-gray-50 rounded-2xl ${color}`}>{React.cloneElement(icon, { size: 32 })}</div>
+       <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] leading-none mb-1.5">{title}</p>
+       <p className={`text-4xl font-black leading-none tracking-tighter ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+function AuthScreen({ onLogin, onRegister, onAdminLogin, error, isProcessing }) {
+  const [mode, setMode] = useState('login');
+  const [selectedUnidade, setSelectedUnidade] = useState("");
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans text-gray-800">
+      <div className="max-w-4xl w-full bg-white rounded-[4rem] shadow-2xl overflow-hidden flex flex-col md:flex-row border border-gray-100/50">
+        <div className="md:w-1/2 bg-primary p-12 text-white flex flex-col justify-center relative overflow-hidden text-center">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+          <Crown size={56} className="mx-auto mb-6 opacity-90 drop-shadow-lg" />
+          <h1 className="text-4xl font-black mb-4 uppercase leading-none tracking-tighter">Portal Ministerial</h1>
+          <p className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-60">Frequência • Escalas</p>
+        </div>
+        <div className="md:w-1/2 p-12 overflow-y-auto max-h-[90vh] scrollbar-hide">
+          <div className="flex gap-2 mb-8 bg-gray-100 p-1.5 rounded-3xl">
+            <button onClick={() => setMode('login')} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-2xl transition-all ${mode === 'login' ? 'bg-white shadow-md text-primary' : 'text-gray-400 hover:text-gray-500'}`}>Acesso</button>
+            <button onClick={() => setMode('register')} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-2xl transition-all ${mode === 'register' ? 'bg-white shadow-md text-primary' : 'text-gray-400 hover:text-gray-500'}`}>Cadastro</button>
+            <button onClick={() => setMode('admin')} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-2xl transition-all ${mode === 'admin' ? 'bg-white shadow-md text-purple-600' : 'text-gray-400'}`}>Admin</button>
+          </div>
+          
+          <h2 className="text-2xl font-black uppercase tracking-tighter mb-6 text-gray-700">{mode === 'login' ? 'Bem-vindo' : mode === 'register' ? 'Nova Conta' : 'Acesso Master'}</h2>
+          
+          <form onSubmit={mode === 'admin' ? onAdminLogin : mode === 'login' ? onLogin : onRegister} className="space-y-4">
+            {mode === 'login' && (
+              <>
+                <div className="relative group">
+                  <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-primary" size={18} />
+                  <input name="name" placeholder="Nome de Utilizador" required className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 transition-all focus:bg-white shadow-sm" />
+                </div>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-primary" size={18} />
+                  <input name="password" type="password" placeholder="Senha" required className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 transition-all focus:bg-white shadow-sm" />
+                </div>
+              </>
+            )}
+            
+            {mode === 'register' && (
+              <div className="space-y-3 animate-in fade-in">
+                <input name="name" placeholder="Nome Completo" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 shadow-sm" />
+                <input name="phone" placeholder="Celular (WhatsApp)" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 shadow-sm" />
+
+                <select 
+                  name="unidadeType" 
+                  defaultValue="" 
+                  required 
+                  onChange={(e) => setSelectedUnidade(e.target.value)}
+                  className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-black text-[10px] border-2 border-transparent focus:border-primary/20 uppercase tracking-widest cursor-pointer shadow-sm"
+                >
+                  <option value="" disabled>Selecione sua Igreja</option>
+                  <option value="Regional">Regional</option>
+                  <option value="Setor">Setor</option>
+                  <option value="Congregação">Congregação</option>
+                </select>
+
+                {selectedUnidade && (
+                  <input name="regionalName" placeholder="Nome da Regional" required className="w-full p-4 bg-white border-2 border-primary/20 rounded-2xl outline-none font-bold text-sm animate-in slide-in-from-top-1 shadow-sm" />
+                )}
+
+                {(selectedUnidade === "Setor" || selectedUnidade === "Congregação") && (
+                  <input name="setorName" placeholder="Nome do Setor" required className="w-full p-4 bg-white border-2 border-primary/20 rounded-2xl outline-none font-bold text-sm animate-in slide-in-from-top-1 shadow-sm" />
+                )}
+
+                {selectedUnidade === "Congregação" && (
+                  <input name="congregacaoName" placeholder="Nome da Congregação" required className="w-full p-4 bg-white border-2 border-primary/20 rounded-2xl outline-none font-bold text-sm animate-in slide-in-from-top-1 shadow-sm" />
+                )}
+
+                <input name="password" type="password" placeholder="Definir Senha (mín. 6 chars)" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 shadow-sm" />
+              </div>
+            )}
+            
+            {mode === 'admin' && (
+              <input name="adminPassword" type="password" placeholder="Senha Mestre Padrão" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-purple-200 shadow-sm" />
+            )}
+            
+            {error && <div className="p-4 bg-red-50 text-red-500 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 animate-in slide-in-from-top-2 border border-red-100 shadow-sm"><AlertCircle size={14}/> {error}</div>}
+            
+            <button type="submit" disabled={isProcessing} className={`w-full ${mode === 'admin' ? 'bg-purple-600 shadow-purple-100' : 'bg-primary shadow-blue-100'} text-white py-5 rounded-[1.5rem] font-black shadow-xl uppercase tracking-widest text-[11px] transition-all active:scale-95 hover:brightness-110`}>
+              {isProcessing ? "Processando..." : "Confirmar"}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ title, value, icon, color }) {
+  return (
+    <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col items-center justify-center text-center group hover:border-primary transition-all">
+      <div className={`mb-3 p-4 bg-gray-50 rounded-[1.5rem] ${color} transition-colors group-hover:bg-primary/10`}>{React.cloneElement(icon, { size: 28 })}</div>
+      <div>
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] leading-none mb-1.5">{title}</p>
+        <p className="text-3xl font-black tracking-tighter leading-none text-gray-800">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function NavItem({ active, icon, label, onClick, open }) {
+  return (
+    <button onClick={onClick} className={`w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-200 ${
+      active ? 'bg-primary text-white shadow-xl shadow-blue-200 scale-[1.02]' : 'text-gray-500 hover:bg-gray-100 hover:text-primary active:scale-95'
+    }`}>
+      <div className="shrink-0">{icon}</div>
+      {open && <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>}
+    </button>
+  );
+}
+
+function PendingScreen({ onLogout }) {
+  return (
+    <div className="h-screen bg-gray-50 flex items-center justify-center p-6 text-center">
+      <div className="max-w-sm bg-white p-12 rounded-[3.5rem] shadow-xl border border-gray-100 animate-in zoom-in">
+        <Clock className="text-yellow-500 animate-pulse mx-auto mb-4" size={64} />
+        <h1 className="text-3xl font-black mb-2 uppercase tracking-tighter leading-none text-gray-800">Em Análise</h1>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8 leading-relaxed">Seu cadastro foi enviado com sucesso. <br/>Aguarde a ativação pelo administrador.</p>
+        <button onClick={onLogout} className="w-full py-4 rounded-2xl border-2 border-gray-100 font-black text-[10px] text-gray-400 hover:text-red-500 uppercase tracking-widest transition-all hover:border-red-100 text-center flex items-center justify-center gap-2"><LogOut size={14}/> Sair</button>
+      </div>
+    </div>
+  );
+}
+
+function BlockedScreen({ onLogout }) {
+  return (
+    <div className="h-screen bg-red-50 flex items-center justify-center p-6 text-center">
+      <div className="max-w-sm bg-white p-12 rounded-[3rem] shadow-xl border-t-8 border-red-500 animate-in zoom-in">
+        <ShieldAlert className="text-red-500 mx-auto mb-4" size={64} />
+        <h1 className="text-3xl font-black text-red-600 mb-2 uppercase tracking-tighter leading-none">Suspenso</h1>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8 leading-relaxed">Acesso temporariamente bloqueado.</p>
+        <button onClick={onLogout} className="w-full bg-red-50 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[11px] transition hover:shadow-lg shadow-red-100 active:scale-95">Sair</button>
+      </div>
+    </div>
+  );
+}
+
+function SettingsView({ settings, onUpdate }) {
+  return (
+    <div className="max-w-2xl mx-auto bg-white p-10 rounded-[3rem] border shadow-sm space-y-8 animate-in slide-in-from-bottom-8">
+      <h2 className="text-2xl font-black text-primary flex items-center gap-2 uppercase tracking-tighter leading-none"><Palette /> Identidade Visual</h2>
+      <div className="space-y-6">
+        <input value={settings.siteName} onChange={e => onUpdate({...settings, siteName: e.target.value})} placeholder="Título do Portal" className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition" />
+        <input type="color" value={settings.primaryColor} onChange={e => onUpdate({...settings, primaryColor: e.target.value})} className="w-full h-14 bg-transparent cursor-pointer rounded-2xl" />
+        <input value={settings.logoUrl || ''} onChange={e => onUpdate({...settings, logoUrl: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl font-medium text-xs border-2 border-transparent focus:border-primary transition" placeholder="URL do Logotipo (.png)" />
+      </div>
+    </div>
+  );
+}

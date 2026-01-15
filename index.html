@@ -67,32 +67,21 @@
         const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
         const YEARS = [2024, 2025, 2026, 2027];
 
-        // --- Componente de Ícone Corrigido ---
         const Icon = ({ name, size = 20, className = "", strokeWidth = 2 }) => {
             const containerRef = useRef(null);
-
             useEffect(() => {
                 if (containerRef.current && window.lucide) {
-                    // Limpa o conteúdo anterior para evitar duplicatas ou erros de renderização
                     containerRef.current.innerHTML = "";
                     const iconElement = document.createElement("i");
-                    // Converte camelCase para kebab-case (ex: LayoutDashboard -> layout-dashboard)
                     const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
                     iconElement.setAttribute("data-lucide", kebabName);
                     containerRef.current.appendChild(iconElement);
-
                     window.lucide.createIcons({
-                        attrs: {
-                            width: size,
-                            height: size,
-                            "stroke-width": strokeWidth,
-                            class: className
-                        },
+                        attrs: { width: size, height: size, "stroke-width": strokeWidth, class: className },
                         root: containerRef.current
                     });
                 }
             }, [name, size, className, strokeWidth]);
-
             return <span ref={containerRef} className="inline-flex items-center justify-center leading-none"></span>;
         };
 
@@ -109,11 +98,17 @@
 
         // --- COMPONENTES AUXILIARES ---
 
-        function FilterHeader({ month, setMonth, year, setYear, title }) {
+        function FilterHeader({ month, setMonth, year, setYear, day, setDay, title, showDay = false }) {
             return (
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print mb-6">
                     <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">{title}</h1>
-                    <div className="flex gap-2 bg-white p-2 rounded-2xl border shadow-sm">
+                    <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm">
+                        {showDay && (
+                            <select value={day || ""} onChange={e => setDay(e.target.value ? Number(e.target.value) : null)} className="bg-transparent text-[10px] font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                <option value="">Todos os Dias</option>
+                                {[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>Dia {i+1}</option>)}
+                            </select>
+                        )}
                         <select value={month} onChange={e => setMonth(Number(e.target.value))} className="bg-transparent text-[10px] font-black uppercase outline-none px-2 cursor-pointer text-gray-800">
                             {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
                         </select>
@@ -222,7 +217,7 @@
                             </div>
                         </div>
                         <div className="md:w-1/2 p-12 overflow-y-auto max-h-[90vh]">
-                            <div className="flex gap-2 mb-8 bg-gray-100 p-1.5 rounded-2xl">
+                            <div className="flex gap-2 mb-8 bg-gray-100 p-1.5 rounded-2xl text-gray-800">
                                 <button onClick={() => setMode('login')} className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all duration-300 ${mode === 'login' ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>Entrar</button>
                                 <button onClick={() => setMode('register')} className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all duration-300 ${mode === 'register' ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>Criar</button>
                                 <button onClick={() => setMode('admin')} className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all duration-300 ${mode === 'admin' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>Admin</button>
@@ -308,7 +303,7 @@
                         <h2 className="text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-gray-800"><Icon name="FileText" className="text-primary" /> Histórico Ministerial</h2>
                         <div className="divide-y divide-gray-50">
                             {filteredAtt.map(a => (
-                                <div key={a.id} className="py-4 flex justify-between items-center text-gray-800">
+                                <div key={a.id} className="py-4 flex justify-between items-center text-gray-800 text-gray-800">
                                     <div>
                                         <p className="font-bold uppercase text-xs">{a.eventName}</p>
                                         <p className="text-[10px] text-gray-400 font-black uppercase tracking-tight">{a.servingDept} • {new Date(a.timestamp).toLocaleDateString()}</p>
@@ -330,15 +325,23 @@
             const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
             const [filterYear, setFilterYear] = useState(new Date().getFullYear());
             const [expandedEvent, setExpandedEvent] = useState(null);
+            const [showEscalatedOnly, setShowEscalatedOnly] = useState(false);
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date);
                 if (d.getUTCMonth() !== Number(filterMonth) || d.getUTCFullYear() !== Number(filterYear)) return false;
                 if (ev.category !== category && !(ev.category === undefined && category === "Agenda Ministerial")) return false;
+                
+                // Se o filtro "Escala do Mês" estiver ativo
+                if (showEscalatedOnly) {
+                    const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
+                    return ev.scaleStatus === 'ready' && myAtt?.isEscalated;
+                }
+
                 if (activeTab === 'sábados') return d.getUTCDay() === 6;
                 if (activeTab === 'domingos') return d.getUTCDay() === 0;
                 return d.getUTCDay() !== 0 && d.getUTCDay() !== 6;
-            }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, activeTab, filterMonth, filterYear, category]);
+            }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, activeTab, filterMonth, filterYear, category, showEscalatedOnly, attendance, userProfile.uid]);
 
             const respond = async (event, status, deptName = 'INDISPONÍVEL') => {
                 const attId = `${event.id}_${userProfile.uid}`;
@@ -354,79 +357,95 @@
             return (
                 <div className="space-y-6 text-gray-800">
                     <FilterHeader title={category} month={filterMonth} setMonth={setFilterMonth} year={filterYear} setYear={setFilterYear} />
-                    <div className="flex gap-2 bg-white p-1 rounded-2xl border shadow-sm w-fit no-print">
-                        {['semanal', 'sábados', 'domingos'].map(t => <button key={t} onClick={() => setActiveTab(t)} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>{t}</button>)}
+                    
+                    <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center no-print">
+                        <div className="flex gap-2 bg-white p-1 rounded-2xl border shadow-sm w-fit text-gray-800">
+                            {['semanal', 'sábados', 'domingos'].map(t => (
+                                <button key={t} onClick={() => { setActiveTab(t); setShowEscalatedOnly(false); }} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${!showEscalatedOnly && activeTab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>{t}</button>
+                            ))}
+                        </div>
+
+                        <button 
+                            onClick={() => setShowEscalatedOnly(!showEscalatedOnly)}
+                            className={`flex items-center gap-2 px-6 py-3 rounded-2xl border-2 font-black uppercase text-[10px] transition-all ${showEscalatedOnly ? 'bg-green-600 border-green-600 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-400 hover:border-green-400 hover:text-green-600'}`}
+                        >
+                            <Icon name="ClipboardCheck" size={14} />
+                            {showEscalatedOnly ? "Ver Todos os Eventos" : "Escala do Mês (Publicada)"}
+                        </button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-gray-800">
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredEvents.map(ev => {
                             const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
                             const isReady = ev.scaleStatus === 'ready';
+                            const isUserEscalated = myAtt?.isEscalated && isReady;
+
                             return (
-                                <div key={ev.id} className="bg-white rounded-[2.5rem] border p-8 shadow-sm hover:border-primary transition-all flex flex-col card-print text-gray-800">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className={`p-4 rounded-2xl text-white shadow-lg ${isReady ? 'bg-gray-800' : 'bg-primary'}`}>
+                                <div key={ev.id} className={`bg-white rounded-[2.5rem] border p-8 shadow-sm transition-all flex flex-col card-print text-gray-800 ${isUserEscalated ? 'ring-4 ring-green-400 border-transparent bg-green-50/10' : 'hover:border-primary'}`}>
+                                    <div className="flex items-center justify-between mb-4 text-gray-800">
+                                        <div className={`p-4 rounded-2xl text-white shadow-lg ${isUserEscalated ? 'bg-green-600' : isReady ? 'bg-gray-800' : 'bg-primary'}`}>
                                             <p className="text-[10px] font-black uppercase opacity-60">Dia</p>
                                             <p className="text-2xl font-black leading-none">{new Date(ev.date).getUTCDate()}</p>
                                         </div>
-                                        {isReady && <span className="bg-green-100 text-green-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Escala Pronta</span>}
+                                        {isUserEscalated ? (
+                                            <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><Icon name="Check" size={10}/> Você foi Escalado!</span>
+                                        ) : isReady && (
+                                            <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Escala Pronta</span>
+                                        )}
                                     </div>
 
                                     <h3 className="text-xl font-black uppercase mb-6 leading-tight text-gray-800">{ev.name}</h3>
 
-                                    <div className="space-y-3 mb-8">
-                                        <div className="flex items-center gap-3 text-gray-400">
-                                            <Icon name="Clock" size={16} className="text-primary" />
-                                            <div>
-                                                <p className="text-[9px] font-black uppercase tracking-widest leading-none mb-1">Horário</p>
-                                                <p className="text-xs font-bold text-gray-700">{ev.time}</p>
-                                            </div>
+                                    <div className="space-y-4 mb-8">
+                                        <div className="flex items-center gap-3 text-gray-700">
+                                            <Icon name="Clock" size={18} className="text-primary shrink-0" />
+                                            <p className="text-sm font-bold text-gray-800">{ev.time}</p>
                                         </div>
-                                        <div className="flex items-center gap-3 text-gray-400">
-                                            <Icon name="Calendar" size={16} className="text-primary" />
-                                            <div>
-                                                <p className="text-[9px] font-black uppercase tracking-widest leading-none mb-1">Período</p>
-                                                <p className="text-xs font-bold text-gray-700">{ev.period || "Não informado"}</p>
-                                            </div>
+                                        <div className="flex items-center gap-3 text-gray-700">
+                                            <Icon name="Calendar" size={18} className="text-primary shrink-0" />
+                                            <p className="text-sm font-bold text-gray-800">{ev.period || "---"}</p>
                                         </div>
-                                        <div className="flex items-center gap-3 text-gray-400">
-                                            <Icon name="MapPin" size={16} className="text-primary" />
-                                            <div>
-                                                <p className="text-[9px] font-black uppercase tracking-widest leading-none mb-1">Local</p>
-                                                <p className="text-xs font-bold text-gray-700">{ev.location || "Não informado"}</p>
-                                            </div>
+                                        <div className="flex items-center gap-3 text-gray-700">
+                                            <Icon name="MapPin" size={18} className="text-primary shrink-0" />
+                                            <p className="text-sm font-bold text-gray-800">{ev.location || "---"}</p>
                                         </div>
                                     </div>
 
-                                    <div className="no-print mt-auto pt-6 border-t border-gray-50">
-                                        {myAtt ? (
-                                            <div className="space-y-4">
+                                    <div className="no-print mt-auto pt-6 border-t border-gray-50 text-gray-800">
+                                        {(myAtt && expandedEvent !== ev.id) ? (
+                                            <div className="space-y-4 text-gray-800">
                                                 <div className={`p-4 rounded-2xl text-center border-2 font-black uppercase text-xs shadow-sm flex flex-col gap-1 ${myAtt.status === 'present' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
-                                                    <span className="text-[9px] opacity-60">Sua Resposta:</span>
-                                                    <span>{myAtt.status === 'present' ? `Servindo: ${myAtt.servingDept}` : 'Indisponível'}</span>
+                                                    <span className="text-[9px] opacity-60">Resposta Registrada:</span>
+                                                    <span>{myAtt.status === 'present' ? `${myAtt.servingDept}` : 'Indisponível'}</span>
                                                 </div>
                                                 {!isReady && (
-                                                    <button onClick={() => setExpandedEvent(ev.id)} className="w-full text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-primary transition-colors">
-                                                        Alterar Resposta
+                                                    <button onClick={() => setExpandedEvent(ev.id)} className="w-full flex items-center justify-center gap-2 py-3 bg-gray-50 rounded-xl text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-primary hover:bg-primary/5 transition-all">
+                                                        <Icon name="Edit2" size={12} /> Alterar Resposta
                                                     </button>
                                                 )}
                                             </div>
                                         ) : expandedEvent === ev.id ? (
-                                            <div className="space-y-2 animate-in slide-in-from-bottom-2">
-                                                <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Onde vai servir?</p>
-                                                {departments.filter(d => userProfile.participatingDepts?.includes(d.id) || userProfile.role === 'master').map(d => (
-                                                    <button key={d.id} onClick={() => respond(ev, 'present', d.name)} className="w-full p-3 border-2 rounded-xl text-[10px] font-black uppercase transition-all hover:bg-gray-50" style={{ borderColor: `${d.color}40`, color: d.color }}>{d.name}</button>
-                                                ))}
-                                                <button onClick={() => respond(ev, 'absent')} className="w-full p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase border-2 border-transparent">Indisponível</button>
-                                                <button onClick={() => setExpandedEvent(null)} className="w-full text-[10px] font-black text-gray-300 mt-2 uppercase tracking-widest">Cancelar</button>
+                                            <div className="space-y-2 animate-in slide-in-from-bottom-2 text-gray-800">
+                                                <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Escolha seu departamento:</p>
+                                                <div className="grid grid-cols-1 gap-2">
+                                                    {departments.filter(d => userProfile.participatingDepts?.includes(d.id) || userProfile.role === 'master').map(d => (
+                                                        <button key={d.id} onClick={() => respond(ev, 'present', d.name)} className="w-full p-3 border-2 rounded-xl text-[10px] font-black uppercase transition-all hover:bg-gray-50 text-left flex items-center justify-between" style={{ borderColor: `${d.color}20`, color: d.color }}>
+                                                            {d.name}
+                                                            <Icon name="ChevronRight" size={12} />
+                                                        </button>
+                                                    ))}
+                                                    <button onClick={() => respond(ev, 'absent')} className="w-full p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase border-2 border-red-100 hover:bg-red-100 transition-colors">Marcar como Indisponível</button>
+                                                </div>
+                                                <button onClick={() => setExpandedEvent(null)} className="w-full text-[10px] font-black text-gray-300 mt-2 uppercase tracking-widest p-2 hover:text-gray-500">Voltar</button>
                                             </div>
                                         ) : (
-                                            <button onClick={() => setExpandedEvent(ev.id)} className="w-full py-4 bg-primary text-white rounded-2xl font-black text-[11px] uppercase shadow-lg shadow-blue-100 hover:scale-[1.02] transition-all">Confirmar Disponibilidade</button>
+                                            <button onClick={() => setExpandedEvent(ev.id)} className="w-full py-4 bg-primary text-white rounded-2xl font-black text-[11px] uppercase shadow-lg shadow-blue-100 hover:scale-[1.02] transition-all">Dar Disponibilidade</button>
                                         )}
                                     </div>
                                 </div>
                             );
                         })}
-                        {filteredEvents.length === 0 && <p className="col-span-full py-20 text-center text-gray-300 font-black uppercase text-xs border-2 border-dashed rounded-[3rem]">Nenhum evento para este período.</p>}
+                        {filteredEvents.length === 0 && <p className="col-span-full py-20 text-center text-gray-300 font-black uppercase text-xs border-2 border-dashed rounded-[3rem]">Nenhum evento encontrado no período.</p>}
                     </div>
                 </div>
             );
@@ -435,13 +454,12 @@
         function UserDepartments({ departments, userProfile }) {
             const [month, setMonth] = useState(new Date().getMonth());
             const [year, setYear] = useState(new Date().getFullYear());
-            
             const myDepts = useMemo(() => departments.filter(d => userProfile.participatingDepts?.includes(d.id)), [departments, userProfile.participatingDepts]);
             
             return (
                 <div className="space-y-6 text-gray-800">
                     <FilterHeader title="Minhas Frentes" month={month} setMonth={setMonth} year={year} setYear={setYear} />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-gray-800">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {myDepts.map(d => (
                             <div key={d.id} className="bg-white p-8 rounded-[2.5rem] border-l-8 shadow-sm relative overflow-hidden group text-gray-800" style={{ borderLeftColor: d.color }}>
                                 <div className="flex justify-between items-start mb-6">
@@ -464,13 +482,17 @@
         function ReportsView({ attendance, allUsers, departments }) {
             const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
             const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+            const [filterDay, setFilterDay] = useState(null);
             const [memberSearch, setMemberSearch] = useState('');
             const [selectedMember, setSelectedMember] = useState(null);
 
             const filteredData = useMemo(() => attendance.filter(a => {
                 const d = new Date(a.timestamp);
-                return d.getMonth() === Number(filterMonth) && d.getFullYear() === Number(filterYear);
-            }), [attendance, filterMonth, filterYear]);
+                const matchesMonth = d.getMonth() === Number(filterMonth);
+                const matchesYear = d.getFullYear() === Number(filterYear);
+                const matchesDay = filterDay ? d.getDate() === Number(filterDay) : true;
+                return matchesMonth && matchesYear && matchesDay;
+            }), [attendance, filterMonth, filterYear, filterDay]);
 
             const stats = useMemo(() => {
                 const total = filteredData.length;
@@ -491,9 +513,15 @@
 
             return (
                 <div className="space-y-8 text-gray-800 pb-20">
-                    <FilterHeader title="Relatórios" month={filterMonth} setMonth={setFilterMonth} year={filterYear} setYear={setFilterYear} />
+                    <FilterHeader 
+                        title="Relatórios" 
+                        month={filterMonth} setMonth={setFilterMonth} 
+                        year={filterYear} setYear={setFilterYear} 
+                        day={filterDay} setDay={setFilterDay}
+                        showDay={true}
+                    />
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-gray-800">
                         <StatItem title="Disponibilidade" value={`${stats.rate}%`} iconName="PieChart" colorClass="text-primary" />
                         <StatItem title="Agenda Ministerial" value={stats.agenda} iconName="BookOpen" colorClass="text-blue-600" />
                         <StatItem title="Congressos" value={stats.congress} iconName="Trophy" colorClass="text-orange-600" />
@@ -501,12 +529,12 @@
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-gray-800">
-                        <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden flex flex-col no-print">
+                        <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden flex flex-col no-print text-gray-800">
                             <div className="p-8 border-b bg-gray-50 text-gray-800">
                                <h3 className="text-lg font-black uppercase tracking-tighter flex items-center gap-2 text-gray-800"><Icon name="SearchCode" size={20} className="text-primary"/> Analisar Membro</h3>
-                               <input type="text" placeholder="Nome do membro..." className="w-full mt-4 p-4 bg-white rounded-2xl border-2 border-transparent focus:border-primary outline-none font-bold text-sm shadow-sm text-gray-800" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} />
+                               <input type="text" placeholder="Pesquisar..." className="w-full mt-4 p-4 bg-white rounded-2xl border-2 border-transparent focus:border-primary outline-none font-bold text-sm shadow-sm text-gray-800" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} />
                             </div>
-                            <div className="flex-1 p-4 max-h-60 overflow-y-auto space-y-2">
+                            <div className="flex-1 p-4 max-h-60 overflow-y-auto space-y-2 text-gray-800">
                                {memberSearch && allUsers.filter(u => u.name.toLowerCase().includes(memberSearch.toLowerCase())).map(u => (
                                   <button key={u.uid} onClick={() => setSelectedMember(u)} className={`w-full p-4 rounded-2xl text-left border-2 transition-all flex justify-between items-center ${selectedMember?.uid === u.uid ? 'border-primary bg-primary/5' : 'border-gray-50 bg-white'}`}>
                                      <span className="font-bold text-xs uppercase tracking-tight text-gray-800">{u.name}</span>
@@ -517,7 +545,7 @@
                             {selectedMember && (
                                <div className="p-8 bg-primary/5 border-t space-y-4">
                                   <div className="flex items-center gap-3">
-                                     <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-black uppercase shadow-lg">{selectedMember.name.charAt(0)}</div>
+                                     <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-black uppercase shadow-lg text-white">{selectedMember.name.charAt(0)}</div>
                                      <p className="font-black uppercase text-sm text-gray-800">{selectedMember.name}</p>
                                   </div>
                                   <div className="grid grid-cols-2 gap-4">
@@ -534,7 +562,7 @@
                                {deptStats.map(d => (
                                   <div key={d.name} className="p-4 bg-gray-50 rounded-[1.5rem] border border-transparent group">
                                      <div className="flex justify-between items-center mb-2">
-                                        <span className="text-[10px] font-black uppercase tracking-tight" style={{ color: d.color }}>{d.name}</span>
+                                        <span className="text-[10px] font-black uppercase tracking-tight text-gray-800" style={{ color: d.color }}>{d.name}</span>
                                         <span className="text-[10px] font-black text-gray-400 uppercase">{d.rate}% engajamento</span>
                                      </div>
                                      <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner"><div className="h-full transition-all duration-1000 ease-out" style={{ width: `${d.rate}%`, backgroundColor: d.color }}></div></div>
@@ -617,7 +645,7 @@
                                 <input name="leader" defaultValue={editing?.leader} placeholder="Líder" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800" />
                                 <textarea name="description" defaultValue={editing?.description} placeholder="Descrição" className="w-full p-4 bg-gray-50 rounded-2xl font-medium outline-none h-24 text-gray-800" />
                                 <input name="color" type="color" defaultValue={editing?.color || "#3b82f6"} className="w-full h-12 bg-transparent cursor-pointer" />
-                                <div className="flex gap-4 pt-4 text-gray-800">
+                                <div className="flex gap-4 pt-4 text-gray-800 text-gray-800">
                                     <button type="button" onClick={() => {setShowAdd(false); setEditing(null); setIconPreview('');}} className="flex-1 text-xs font-black uppercase text-gray-400">Cancelar</button>
                                     <button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg text-white">Salvar</button>
                                 </div>
@@ -747,7 +775,7 @@
 
                                         return (
                                             <div key={dept.id} className="space-y-4">
-                                                <div className="flex items-center gap-3 border-b-2 pb-2" style={{ borderColor: `${dept.color}20` }}>
+                                                <div className="flex items-center gap-3 border-b-2 pb-2 text-gray-800" style={{ borderColor: `${dept.color}20` }}>
                                                     <div className="w-2 h-8 rounded-full" style={{ backgroundColor: dept.color }}></div>
                                                     <h3 className="font-black uppercase text-sm" style={{ color: dept.color }}>{dept.name}</h3>
                                                 </div>
@@ -852,21 +880,21 @@
                     {(showAdd || editing) && (
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                             <form onSubmit={handleSave} className="bg-white p-8 rounded-[3rem] w-full max-w-md space-y-4 text-gray-800 shadow-2xl overflow-y-auto max-h-[90vh]">
-                                <h2 className="text-2xl font-black uppercase text-gray-800">Evento</h2>
-                                <select name="category" defaultValue={editing?.category || 'Agenda Ministerial'} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary text-gray-800">
+                                <h2 className="text-2xl font-black uppercase text-gray-800 text-gray-800">Evento</h2>
+                                <select name="category" defaultValue={editing?.category || 'Agenda Ministerial'} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary text-gray-800 text-gray-800">
                                     <option value="Agenda Ministerial">Agenda Ministerial</option>
                                     <option value="Congressos">Congressos</option>
                                 </select>
-                                <input name="name" defaultValue={editing?.name} placeholder="Nome" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800" />
-                                <div className="grid grid-cols-2 gap-2">
+                                <input name="name" defaultValue={editing?.name} placeholder="Nome" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800 text-gray-800" />
+                                <div className="grid grid-cols-2 gap-2 text-gray-800">
                                     <input name="date" type="date" defaultValue={editing?.date} required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800" />
                                     <input name="time" type="time" defaultValue={editing?.time} required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800" />
                                 </div>
-                                <input name="location" defaultValue={editing?.location} placeholder="Local" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800" />
-                                <input name="period" defaultValue={editing?.period} placeholder="Período" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800" />
-                                <div className="flex gap-4 pt-4">
+                                <input name="location" defaultValue={editing?.location} placeholder="Local" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800 text-gray-800" />
+                                <input name="period" defaultValue={editing?.period} placeholder="Período" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800 text-gray-800" />
+                                <div className="flex gap-4 pt-4 text-gray-800 text-gray-800">
                                     <button type="button" onClick={() => {setShowAdd(false); setEditing(null)}} className="flex-1 text-xs font-black uppercase text-gray-400">Cancelar</button>
-                                    <button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs text-white shadow-lg">Salvar</button>
+                                    <button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs text-white shadow-lg text-white">Salvar</button>
                                 </div>
                             </form>
                         </div>
@@ -917,19 +945,19 @@
                         </div>
                     </div>
                     <div className="bg-white rounded-[2.5rem] border overflow-hidden shadow-sm">
-                        <div className="overflow-x-auto text-gray-800">
+                        <div className="overflow-x-auto text-gray-800 text-gray-800">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-[10px] font-black uppercase tracking-widest border-b text-gray-800">
+                                <thead className="bg-gray-50 text-[10px] font-black uppercase tracking-widest border-b text-gray-800 text-gray-800">
                                     <tr><th className="px-8 py-4">Membro</th><th className="px-8 py-4 text-center">Status</th><th className="px-8 py-4 text-right">Ações</th></tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 text-gray-800">
                                     {filtered.map(u => (
                                         <tr key={u.uid} className="hover:bg-gray-50/50 group text-gray-800">
-                                            <td className="px-8 py-4 font-bold text-gray-800">
-                                                <p className="font-black text-sm uppercase text-gray-800">{u.name}</p>
+                                            <td className="px-8 py-4 font-bold text-gray-800 text-gray-800">
+                                                <p className="font-black text-sm uppercase text-gray-800 text-gray-800">{u.name}</p>
                                                 <p className="text-[8px] font-bold text-gray-400 uppercase">{u.unidadeType}: {u.regionalName}</p>
                                             </td>
-                                            <td className="px-8 py-4 text-center">
+                                            <td className="px-8 py-4 text-center text-gray-800">
                                                 <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${u.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                                                     {u.status === 'active' ? "Ativo" : u.status === 'pending' ? "Pendente" : "Bloqueado"}
                                                 </span>
@@ -949,33 +977,33 @@
                     {editingUser && (
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                             <form onSubmit={handleSave} className="bg-white p-8 rounded-[3rem] w-full max-w-lg space-y-4 shadow-2xl overflow-y-auto max-h-[90vh] text-gray-800">
-                                <h2 className="text-2xl font-black uppercase text-gray-800">Perfil do Usuário</h2>
-                                <div className="grid grid-cols-2 gap-4 text-gray-800">
-                                    <input name="name" defaultValue={editingUser?.name} placeholder="Nome" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800" />
-                                    <input name="phone" defaultValue={editingUser?.phone} placeholder="WhatsApp" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800" />
-                                    <select name="role" defaultValue={editingUser?.role || "user"} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800">
+                                <h2 className="text-2xl font-black uppercase text-gray-800 text-gray-800 text-gray-800">Perfil do Usuário</h2>
+                                <div className="grid grid-cols-2 gap-4 text-gray-800 text-gray-800">
+                                    <input name="name" defaultValue={editingUser?.name} placeholder="Nome" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800 text-gray-800 text-gray-800" />
+                                    <input name="phone" defaultValue={editingUser?.phone} placeholder="WhatsApp" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800 text-gray-800 text-gray-800" />
+                                    <select name="role" defaultValue={editingUser?.role || "user"} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800 text-gray-800">
                                         <option value="user">Membro</option>
                                         <option value="admin">Administrador</option>
                                         <option value="master">Master</option>
                                     </select>
-                                    <select name="status" defaultValue={editingUser?.status || "active"} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800">
+                                    <select name="status" defaultValue={editingUser?.status || "active"} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800 text-gray-800">
                                         <option value="active">Ativo</option>
                                         <option value="pending">Pendente</option>
                                         <option value="blocked">Bloqueado</option>
                                     </select>
-                                    <select name="isAvailable" defaultValue={editingUser?.isAvailable ? 'true' : 'false'} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800">
+                                    <select name="isAvailable" defaultValue={editingUser?.isAvailable ? 'true' : 'false'} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800 text-gray-800">
                                         <option value="true">Disponível</option>
                                         <option value="false">Indisponível</option>
                                     </select>
-                                    <select name="unidadeType" defaultValue={editingUser?.unidadeType} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800">
+                                    <select name="unidadeType" defaultValue={editingUser?.unidadeType} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none text-gray-800 text-gray-800">
                                         <option value="Regional">Regional</option>
                                         <option value="Setor">Setor</option>
                                         <option value="Congregação">Congregação</option>
                                     </select>
                                 </div>
-                                <div className="pt-4 border-t text-gray-800">
+                                <div className="pt-4 border-t text-gray-800 text-gray-800">
                                     <p className="text-[10px] font-black uppercase mb-4 text-gray-400">Departamentos/Frentes:</p>
-                                    <div className="grid grid-cols-2 gap-2 text-gray-800">
+                                    <div className="grid grid-cols-2 gap-2 text-gray-800 text-gray-800">
                                         {departments.map(d => (
                                             <button key={d.id} type="button" onClick={() => toggleDept(d.id)} className={`p-3 rounded-xl border-2 flex items-center justify-between transition-all ${selectedDepts.includes(d.id) ? 'bg-primary/5 border-primary text-primary' : 'bg-gray-50 border-transparent text-gray-400'}`}>
                                                 <span className="text-[9px] font-black uppercase">{d.name}</span>
@@ -984,9 +1012,9 @@
                                         ))}
                                     </div>
                                 </div>
-                                <div className="flex gap-4 pt-6 text-gray-800">
+                                <div className="flex gap-4 pt-6 text-gray-800 text-gray-800">
                                     <button type="button" onClick={() => setEditingUser(null)} className="flex-1 text-xs font-black uppercase text-gray-400 hover:text-red-500">Cancelar</button>
-                                    <button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg text-white">Salvar</button>
+                                    <button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg text-white text-white">Salvar</button>
                                 </div>
                             </form>
                         </div>
@@ -1256,8 +1284,8 @@
                         </div>
                     )}
 
-                    <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white border-r transition-all duration-300 flex flex-col z-30 no-print text-gray-800`}>
-                        <div className="h-20 flex items-center px-6 border-b overflow-hidden gap-3 shrink-0 text-gray-800">
+                    <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white border-r transition-all duration-300 flex flex-col z-30 no-print text-gray-800 text-gray-800`}>
+                        <div className="h-20 flex items-center px-6 border-b overflow-hidden gap-3 shrink-0 text-gray-800 text-gray-800">
                             <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-black shrink-0 shadow-lg overflow-hidden text-sm uppercase">
                                 {settings.logoUrl ? <img src={settings.logoUrl} className="w-full h-full object-cover" alt="Logo" /> : settings.siteName.charAt(0)}
                             </div>
@@ -1270,7 +1298,7 @@
                             <NavItem active={view === 'my_depts'} iconName="Layers" label="Minhas Frentes" onClick={() => setView('my_depts')} open={isSidebarOpen} />
                             
                             {userProfile.isAdmin && (
-                                <div className="pt-6 border-t mt-4 text-gray-800">
+                                <div className="pt-6 border-t mt-4 text-gray-800 text-gray-800">
                                     <NavItem active={view === 'events_admin'} iconName="Calendar" label="Cronograma" onClick={() => setView('events_admin')} open={isSidebarOpen} />
                                     <NavItem active={view === 'users'} iconName="Users" label="Membros" onClick={() => setView('users')} open={isSidebarOpen} />
                                     <NavItem active={view === 'depts_admin'} iconName="Briefcase" label="Frentes" onClick={() => setView('depts_admin')} open={isSidebarOpen} />
@@ -1280,28 +1308,28 @@
                             )}
                         </nav>
                         <div className="p-4 border-t">
-                            <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 text-red-500 hover:bg-red-50 rounded-xl transition font-black text-[10px] uppercase text-red-500">
+                            <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 text-red-500 hover:bg-red-50 rounded-xl transition font-black text-[10px] uppercase text-red-500 text-red-500">
                                 <Icon name="LogOut" size={20} /> {isSidebarOpen && "Sair"}
                             </button>
                         </div>
                     </aside>
 
                     <main className="flex-1 flex flex-col min-w-0 bg-gray-50/50">
-                        <header className="h-20 bg-white border-b px-8 flex items-center justify-between shrink-0 no-print text-gray-800 shadow-sm">
+                        <header className="h-20 bg-white border-b px-8 flex items-center justify-between shrink-0 no-print text-gray-800 shadow-sm text-gray-800">
                             <div className="flex items-center gap-4">
-                                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-800">
+                                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-800 text-gray-800">
                                     <Icon name="Menu" size={20} />
                                 </button>
                                 {notifications.length > 0 && (
-                                    <div className="flex items-center gap-2 bg-green-100 px-3 py-1.5 rounded-full animate-bounce shadow-sm">
+                                    <div className="flex items-center gap-2 bg-green-100 px-3 py-1.5 rounded-full animate-bounce shadow-sm text-gray-800">
                                         <Icon name="Bell" size={14} className="text-green-600" />
                                         <span className="text-[9px] font-black text-green-600 uppercase">Escala Pronta!</span>
                                     </div>
                                 )}
                             </div>
                             <div className="flex items-center gap-3 text-right">
-                                <div className="hidden sm:block text-gray-800">
-                                    <p className="text-sm font-bold leading-none text-gray-800">{userProfile.name}</p>
+                                <div className="hidden sm:block text-gray-800 text-gray-800">
+                                    <p className="text-sm font-bold leading-none text-gray-800 text-gray-800">{userProfile.name}</p>
                                     <p className="text-[10px] text-gray-400 uppercase font-black mt-1 tracking-widest">{userProfile.role}</p>
                                 </div>
                                 <div className="w-10 h-10 rounded-full bg-gray-100 border flex items-center justify-center text-gray-400 overflow-hidden">

@@ -93,10 +93,12 @@ const firebaseConfig = {
   measurementId: "G-SH421MT1FC"
 };
 
+// Inicialização segura
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'midia-adperus-escalas';
+// Definição fixa do AppID para produção para evitar erros de variável indefinida
+const APP_ID_PATH = 'midia-adperus-escalas';
 
 // --- Estilos Globais ---
 const CustomStyles = ({ primaryColor }) => (
@@ -314,7 +316,7 @@ function AgendaView({ events, attendance, userProfile, departments, category, sh
 
   const respond = async (event, status, deptName = 'INDISPONÍVEL') => {
     const attId = `${event.id}_${userProfile.uid}`;
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), {
+    await setDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'attendance', attId), {
       id: attId, eventId: event.id, eventName: event.name, eventDate: event.date, eventCategory: category,
       userId: userProfile.uid, userName: userProfile.name, servingDept: deptName,
       status: status, isEscalated: false, timestamp: new Date().toISOString()
@@ -447,7 +449,7 @@ function ReportsView({ attendance, allUsers, departments }) {
                <input type="text" placeholder="Nome do membro..." className="w-full mt-4 p-4 bg-white rounded-2xl border-2 border-transparent focus:border-primary outline-none font-bold text-sm shadow-sm" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} />
             </div>
             <div className="flex-1 p-4 max-h-60 overflow-y-auto space-y-2">
-               {memberSearch && allUsers.filter(u => u.name.toLowerCase().includes(memberSearch.toLowerCase())).map(u => (
+               {memberSearch && allUsers.filter(u => (u.name || "").toLowerCase().includes(memberSearch.toLowerCase())).map(u => (
                   <button key={u.uid} onClick={() => setSelectedMember(u)} className={`w-full p-4 rounded-2xl text-left border-2 transition-all flex justify-between items-center ${selectedMember?.uid === u.uid ? 'border-primary bg-primary/5' : 'border-gray-50 bg-white'}`}>
                      <span className="font-bold text-xs uppercase tracking-tight">{u.name}</span>
                      <ChevronRight size={14} className="text-gray-300" />
@@ -457,7 +459,7 @@ function ReportsView({ attendance, allUsers, departments }) {
             {selectedMember && (
                <div className="p-8 bg-primary/5 border-t space-y-4 animate-in slide-in-from-bottom-4">
                   <div className="flex items-center gap-3">
-                     <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-black uppercase shadow-lg">{selectedMember.name.charAt(0)}</div>
+                     <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-black uppercase shadow-lg">{(selectedMember.name || "M").charAt(0)}</div>
                      <p className="font-black uppercase text-sm">{selectedMember.name}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -506,8 +508,8 @@ function DepartmentsAdmin({ departments, showToast }) {
     e.preventDefault();
     const data = new FormData(e.target);
     const payload = { name: data.get('name'), leader: data.get('leader'), description: data.get('description'), color: data.get('color'), icon: iconPreview || editing?.icon || '' };
-    if (editing) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'departments', editing.id), payload);
-    else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), payload);
+    if (editing) await updateDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'departments', editing.id), payload);
+    else await addDoc(collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'departments'), payload);
     setEditing(null); setShowAdd(false); setIconPreview('');
     showToast("Salvo!");
   };
@@ -526,7 +528,7 @@ function DepartmentsAdmin({ departments, showToast }) {
             </div>
             <div className="flex gap-2">
               <button onClick={() => { setEditing(d); setIconPreview(d.icon); }} className="p-2 text-gray-400 hover:text-primary transition"><Edit2 size={18}/></button>
-              <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'departments', d.id))} className="p-2 text-gray-400 hover:text-red-500 transition"><Trash2 size={18}/></button>
+              <button onClick={() => deleteDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'departments', d.id))} className="p-2 text-gray-400 hover:text-red-500 transition"><Trash2 size={18}/></button>
             </div>
           </div>
         ))}
@@ -547,7 +549,7 @@ function MembersAdmin({ allUsers, departments, showToast }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingUser, setEditingUser] = useState(null);
   const [selectedDepts, setSelectedDepts] = useState([]);
-  const filtered = useMemo(() => allUsers.filter(u => u.name?.toLowerCase().includes(searchTerm.toLowerCase())), [allUsers, searchTerm]);
+  const filtered = useMemo(() => allUsers.filter(u => (u.name || "").toLowerCase().includes(searchTerm.toLowerCase())), [allUsers, searchTerm]);
   const toggleDept = (id) => setSelectedDepts(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
 
   const handleSave = async (e) => {
@@ -563,7 +565,7 @@ function MembersAdmin({ allUsers, departments, showToast }) {
        participatingDepts: selectedDepts, 
        isAvailable: data.get('isAvailable') === 'true' 
     };
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', editingUser.uid), payload);
+    await updateDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'users', editingUser.uid), payload);
     setEditingUser(null);
     showToast("Sucesso!");
   };
@@ -611,19 +613,19 @@ function EventsAdmin({ events, attendance, departments, showToast }) {
       category: data.get('category'), 
       scaleStatus: editing?.scaleStatus || 'draft' 
     };
-    if (editing) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editing.id), payload);
-    else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), payload);
+    if (editing) await updateDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'events', editing.id), payload);
+    else await addDoc(collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'events'), payload);
     setEditing(null); setShowAdd(false);
     showToast("Salvo!");
   };
 
   const markReady = async (ev, status) => {
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id), { scaleStatus: status ? 'ready' : 'draft' });
+    await updateDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'events', ev.id), { scaleStatus: status ? 'ready' : 'draft' });
     setScaleBuildingState(null);
   };
 
   const toggleEscalated = async (att) => {
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', att.id), { isEscalated: !att.isEscalated });
+    await updateDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'attendance', att.id), { isEscalated: !att.isEscalated });
   };
 
   return (
@@ -635,7 +637,7 @@ function EventsAdmin({ events, attendance, departments, showToast }) {
         </button>
       </div>
       <div className="bg-white rounded-[2.5rem] border overflow-hidden shadow-sm">
-        <div className="overflow-x-auto"><table className="w-full text-left text-gray-800"><thead className="bg-gray-50 text-[10px] font-black uppercase tracking-widest border-b"><tr><th className="px-8 py-4">Evento</th><th className="px-8 py-4 text-center">Status</th><th className="px-8 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100">{filteredEvents.map(ev => (<tr key={ev.id} className="hover:bg-gray-50/50 transition group"><td className="px-8 py-4"><p className="font-black text-sm uppercase">{ev.name}</p><p className="text-[9px] font-bold text-gray-400 uppercase">{new Date(ev.date).toLocaleDateString('pt-PT', {timeZone: 'UTC'})}</p></td><td className="px-8 py-4 text-center"><div className="flex items-center justify-center gap-2"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${ev.scaleStatus === 'ready' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>{ev.scaleStatus === 'ready' ? 'Ativa' : 'Rascunho'}</span><button onClick={() => setScaleBuildingState({ event: ev, step: 'depts' })} className="text-primary hover:underline text-[10px] font-black uppercase">Montar</button></div></td><td className="px-8 py-4 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => setEditing(ev)} className="p-2 text-gray-400 hover:text-primary transition"><Edit2 size={18}/></button><button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id))} className="p-2 text-gray-400 hover:text-red-500 transition"><Trash2 size={18}/></button></div></td></tr>))}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full text-left text-gray-800"><thead className="bg-gray-50 text-[10px] font-black uppercase tracking-widest border-b"><tr><th className="px-8 py-4">Evento</th><th className="px-8 py-4 text-center">Status</th><th className="px-8 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100">{filteredEvents.map(ev => (<tr key={ev.id} className="hover:bg-gray-50/50 transition group"><td className="px-8 py-4"><p className="font-black text-sm uppercase">{ev.name}</p><p className="text-[9px] font-bold text-gray-400 uppercase">{new Date(ev.date).toLocaleDateString('pt-PT', {timeZone: 'UTC'})}</p></td><td className="px-8 py-4 text-center"><div className="flex items-center justify-center gap-2"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${ev.scaleStatus === 'ready' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>{ev.scaleStatus === 'ready' ? 'Ativa' : 'Rascunho'}</span><button onClick={() => setScaleBuildingState({ event: ev, step: 'depts' })} className="text-primary hover:underline text-[10px] font-black uppercase">Montar</button></div></td><td className="px-8 py-4 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => setEditing(ev)} className="p-2 text-gray-400 hover:text-primary transition"><Edit2 size={18}/></button><button onClick={() => deleteDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'events', ev.id))} className="p-2 text-gray-400 hover:text-red-500 transition"><Trash2 size={18}/></button></div></td></tr>))}</tbody></table></div>
       </div>
       
       {scaleBuildingState && (
@@ -727,13 +729,13 @@ function SettingsAdminView({ settings, onUpdate, showToast }) {
     <div className="max-w-2xl mx-auto bg-white p-10 rounded-[3rem] border shadow-sm space-y-8 animate-in slide-in-from-bottom-8 text-gray-800">
       <h2 className="text-2xl font-black text-primary flex items-center gap-2 uppercase tracking-tighter leading-none"><Palette /> Personalizar</h2>
       <div className="space-y-6">
-        <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Nome do Portal</label><input value={settings.siteName} onChange={e => onUpdate({...settings, siteName: e.target.value})} placeholder="Ex: Portal Gileade" className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition text-gray-800 shadow-sm" /></div>
-        <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Cor Principal</label><input type="color" value={settings.primaryColor} onChange={e => onUpdate({...settings, primaryColor: e.target.value})} className="w-full h-14 bg-transparent cursor-pointer rounded-2xl" /></div>
+        <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Nome do Portal</label><input value={settings.siteName || ""} onChange={e => onUpdate({...settings, siteName: e.target.value})} placeholder="Ex: Portal Gileade" className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition text-gray-800 shadow-sm" /></div>
+        <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Cor Principal</label><input type="color" value={settings.primaryColor || "#3b82f6"} onChange={e => onUpdate({...settings, primaryColor: e.target.value})} className="w-full h-14 bg-transparent cursor-pointer rounded-2xl" /></div>
         <div className="pt-4 border-t border-gray-100 space-y-6">
            <h3 className="text-sm font-black uppercase text-gray-400 mb-4 tracking-tighter">Login Customizado</h3>
            <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Nome no Login</label><input value={settings.loginTitle || ''} onChange={e => onUpdate({...settings, loginTitle: e.target.value})} placeholder="Ex: Mídia ADPerus" className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition shadow-sm" /></div>
            <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Ícone do Login (Upload)</label><div className="flex items-center gap-4"><div className="w-16 h-16 rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden">{iconPreview ? <img src={iconPreview} className="w-full h-full object-cover" alt="Preview" /> : <ImageIcon className="text-gray-300" />}</div><label className="flex-1"><div className="p-4 bg-gray-50 rounded-2xl border-2 border-transparent hover:border-primary transition cursor-pointer text-center text-xs font-bold text-gray-500 uppercase shadow-sm">Fazer Upload</div><input type="file" onChange={handleIconUpload} className="hidden" accept="image/*" /></label></div></div>
-           <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Cor de Fundo do Login</label><input type="color" value={settings.loginBgColor || settings.primaryColor} onChange={e => onUpdate({...settings, loginBgColor: e.target.value})} className="w-full h-14 bg-transparent cursor-pointer rounded-2xl" /></div>
+           <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Cor de Fundo do Login</label><input type="color" value={settings.loginBgColor || settings.primaryColor || "#3b82f6"} onChange={e => onUpdate({...settings, loginBgColor: e.target.value})} className="w-full h-14 bg-transparent cursor-pointer rounded-2xl" /></div>
            <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Banner de Fundo (Login URL)</label><input value={settings.loginBannerUrl || ''} onChange={e => onUpdate({...settings, loginBannerUrl: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl font-medium text-xs border-2 border-transparent focus:border-primary transition shadow-sm" placeholder="Cole o link da imagem (ex: Imgur)" /></div>
         </div>
         <button onClick={() => showToast("Ajustes salvos!")} className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg tracking-widest transition-transform active:scale-95">Salvar Configurações</button>
@@ -783,19 +785,9 @@ export default function App() {
 
   // Auth Initialization
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        }
-        setIsAuthReady(true);
-      } catch (err) { 
-        setIsAuthReady(true); 
-      }
-    };
-    initAuth();
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      setIsAuthReady(true);
       if (!u) { 
         setUserProfile(null); 
         setLoading(false); 
@@ -808,28 +800,34 @@ export default function App() {
   useEffect(() => {
     if (!isAuthReady || !user) return;
     
-    const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), (snap) => {
-      if (snap.exists()) setUserProfile(snap.data());
+    // Listener de Perfil com verificação de existência para evitar loops
+    const unsubProfile = onSnapshot(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'users', user.uid), (snap) => {
+      if (snap.exists()) {
+        setUserProfile(snap.data());
+      }
       setLoading(false);
-    }, () => setLoading(false));
+    }, (error) => {
+      console.error("Profile listen error:", error);
+      setLoading(false);
+    });
 
-    const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), (snap) => {
+    const unsubSettings = onSnapshot(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'settings', 'general'), (snap) => {
       if (snap.exists()) setSettings(snap.data());
     });
 
-    const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), snap => {
+    const unsubUsers = onSnapshot(collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'users'), snap => {
       setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), snap => {
+    const unsubEvents = onSnapshot(collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'events'), snap => {
       setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), snap => {
+    const unsubAtt = onSnapshot(collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'attendance'), snap => {
       setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), snap => {
+    const unsubDepts = onSnapshot(collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'departments'), snap => {
       setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
@@ -850,18 +848,17 @@ export default function App() {
     setIsAuthProcessing(true);
     
     const formElements = e.target.elements;
-    const inputName = formElements.name?.value || "";
-    const inputPassword = formElements.password?.value || "";
+    const inputName = (formElements.name?.value || "").trim();
+    const inputPassword = (formElements.password?.value || "").trim();
 
-    // Lógica Master Fixa: Usa conta de e-mail oculta para evitar erro de login anônimo desativado
+    // Lógica Master Fixa
     if (inputPassword === 'adperus2026') {
       const masterEmail = "master_admin@adperus.com";
       try {
         try {
           await signInWithEmailAndPassword(auth, masterEmail, 'adperus2026');
         } catch (err) {
-          // Se não existir, tenta criar (ocorre apenas no primeiro uso absoluto do app)
-          if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-email') {
+          if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-email' || err.code === 'auth/user-disabled') {
              await createUserWithEmailAndPassword(auth, masterEmail, 'adperus2026');
           } else {
              throw err;
@@ -869,20 +866,22 @@ export default function App() {
         }
         
         const curUser = auth.currentUser;
-        const profile = {
-          uid: curUser.uid, 
-          name: inputName || "Admin Master", 
-          email: masterEmail, 
-          role: 'master', 
-          status: 'active', 
-          isAdmin: true, 
-          isAvailable: true, 
-          joinDate: new Date().toISOString(), 
-          participatingDepts: []
-        };
+        if (curUser) {
+          const profile = {
+            uid: curUser.uid, 
+            name: inputName || "Admin Master", 
+            email: masterEmail, 
+            role: 'master', 
+            status: 'active', 
+            isAdmin: true, 
+            isAvailable: true, 
+            joinDate: new Date().toISOString(), 
+            participatingDepts: []
+          };
 
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', curUser.uid), profile);
-        setUserProfile(profile);
+          await setDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'users', curUser.uid), profile);
+          setUserProfile(profile);
+        }
         setIsAuthProcessing(false);
         return;
       } catch (err) {
@@ -895,8 +894,8 @@ export default function App() {
 
     // Login Padrão de Membro
     try {
-      const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'users'));
-      const uFound = snap.docs.map(d => d.data()).find(u => u.name?.trim().toLowerCase() === inputName.trim().toLowerCase());
+      const snap = await getDocs(collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'users'));
+      const uFound = snap.docs.map(d => d.data()).find(u => (u.name || "").trim().toLowerCase() === inputName.toLowerCase());
       if (!uFound) {
         setAuthError('Usuário não encontrado.');
         setIsAuthProcessing(false);
@@ -915,8 +914,8 @@ export default function App() {
     setAuthError('');
     setIsAuthProcessing(true);
     const form = e.target.elements;
-    const inputPassword = form.password?.value || "";
-    const inputName = form.name?.value || "";
+    const inputPassword = (form.password?.value || "").trim();
+    const inputName = (form.name?.value || "").trim();
 
     if (inputPassword.length < 6) {
       setAuthError('Senha deve ter no mínimo 6 caracteres.');
@@ -924,8 +923,8 @@ export default function App() {
       return;
     }
     try {
-      const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'users'));
-      const exists = snap.docs.some(d => d.data().name?.trim().toLowerCase() === inputName.trim().toLowerCase());
+      const snap = await getDocs(collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'users'));
+      const exists = snap.docs.some(d => (d.data().name || "").trim().toLowerCase() === inputName.toLowerCase());
       if (exists) {
         setAuthError('Este nome de usuário já está em uso.');
         setIsAuthProcessing(false);
@@ -935,7 +934,7 @@ export default function App() {
       const res = await createUserWithEmailAndPassword(auth, email, inputPassword);
       
       const isFirst = snap.empty;
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', res.user.uid), {
+      await setDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'users', res.user.uid), {
         uid: res.user.uid,
         name: inputName,
         email,
@@ -958,7 +957,8 @@ export default function App() {
     }
   };
 
-  if (loading && user) {
+  // Renderização de Loading
+  if (loading && isAuthReady) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50">
         <RefreshCw className="animate-spin text-primary" size={32} />
@@ -966,6 +966,7 @@ export default function App() {
     );
   }
 
+  // Renderização de Tela de Login
   if (!user || !userProfile) {
     return (
       <AuthScreen 
@@ -978,6 +979,7 @@ export default function App() {
     );
   }
 
+  // Verificações de Status
   if (userProfile.status === 'pending') return <PendingScreen onLogout={handleLogout} />;
   if (userProfile.status === 'blocked') return <BlockedScreen onLogout={handleLogout} />;
 
@@ -995,7 +997,7 @@ export default function App() {
       <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white border-r transition-all duration-300 flex flex-col z-30 no-print`}>
         <div className="h-20 flex items-center px-6 border-b overflow-hidden gap-3 shrink-0">
           <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-black shrink-0 shadow-lg overflow-hidden text-sm uppercase">
-            {settings.loginIconUrl ? <img src={settings.loginIconUrl} className="w-full h-full object-cover" alt="Logo" /> : settings.siteName.charAt(0)}
+            {settings.loginIconUrl ? <img src={settings.loginIconUrl} className="w-full h-full object-cover" alt="Logo" /> : (settings.siteName || "P").charAt(0)}
           </div>
           {isSidebarOpen && <span className="font-bold text-lg truncate text-primary uppercase tracking-tighter">{settings.siteName}</span>}
         </div>
@@ -1061,7 +1063,7 @@ export default function App() {
               {view === 'users' && <MembersAdmin allUsers={allUsers} departments={departments} showToast={showToast} />}
               {view === 'depts_admin' && <DepartmentsAdmin departments={departments} showToast={showToast} />}
               {view === 'reports' && <ReportsView attendance={attendance} allUsers={allUsers} departments={departments} />}
-              {view === 'settings' && <SettingsAdminView settings={settings} onUpdate={s => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), s)} showToast={showToast} />}
+              {view === 'settings' && <SettingsAdminView settings={settings} onUpdate={s => setDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'settings', 'general'), s)} showToast={showToast} />}
             </>
           )}
         </div>

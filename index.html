@@ -1,607 +1,1071 @@
-<!DOCTYPE html>
-<html lang="pt-pt">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal Ministerial</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & ReactDOM -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <!-- Babel para JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  signInWithCustomToken,
+  signInAnonymously
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  updateDoc, 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  deleteDoc,
+  getDocs,
+  query,
+  where
+} from 'firebase/firestore';
+import { 
+  LayoutDashboard, 
+  Users, 
+  Calendar, 
+  CheckCircle, 
+  Settings, 
+  LogOut, 
+  Menu, 
+  X, 
+  Plus, 
+  Trash2, 
+  UserCheck, 
+  UserMinus, 
+  ShieldAlert, 
+  Clock,
+  ChevronRight,
+  Bell,
+  Layout, 
+  User,
+  Crown,
+  Lock, 
+  Zap,
+  BookOpen, 
+  ClipboardCheck,
+  Search,
+  Filter,
+  Info,
+  Mail,
+  Phone,
+  Building,
+  Image as ImageIcon,
+  ToggleRight,
+  ToggleLeft,
+  Edit2,
+  FileText,
+  BarChart3,
+  XCircle,
+  Briefcase,
+  Layers,
+  Palette,
+  ChevronDown,
+  Star,
+  Check,
+  Upload,
+  RefreshCw,
+  AlertCircle,
+  UserCircle,
+  ClipboardList,
+  Megaphone,
+  CheckSquare,
+  Square,
+  HelpCircle,
+  Trophy,
+  PieChart,
+  SearchCode,
+  MapPin,
+  Church,
+  Printer
+} from 'lucide-react';
+
+// --- Configuração Firebase ---
+const firebaseConfig = {
+  apiKey: "AIzaSyChhzYn6FhzGb7D5mggYeZFI9eW2mIJgro",
+  authDomain: "midia-adperus-escalas.firebaseapp.com",
+  projectId: "midia-adperus-escalas",
+  storageBucket: "midia-adperus-escalas.appspot.com",
+  messagingSenderId: "425939380478",
+  appId: "1:425939380478:web:81ffd64a27468cb43a5daf",
+  measurementId: "G-SH421MT1FC"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'midia-adperus-escalas';
+
+// --- Estilos Globais ---
+const CustomStyles = ({ primaryColor }) => (
+  <style>{`
+    :root { --primary: ${primaryColor || '#3b82f6'}; }
+    .bg-primary { background-color: var(--primary); }
+    .text-primary { color: var(--primary); }
+    .border-primary { border-color: var(--primary); }
+    .ring-primary { --tw-ring-color: var(--primary); }
+    .hover-bg-primary:hover { background-color: var(--primary); opacity: 0.9; }
     
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .animate-in { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        :root { --primary: #3b82f6; }
-        .bg-primary { background-color: var(--primary); }
-        .text-primary { color: var(--primary); }
-        .border-primary { border-color: var(--primary); }
-        .ring-primary { --tw-ring-color: var(--primary); }
-    </style>
-</head>
-<body class="bg-gray-50 text-gray-800">
-    <div id="root"></div>
+    @media print {
+      .no-print { display: none !important; }
+      aside, header, button, .modal-overlay { display: none !important; }
+      main { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow: visible !important; }
+      .print-container { display: block !important; padding: 20px !important; }
+      .card-print { border: 1px solid #eee !important; break-inside: avoid; margin-bottom: 15px; }
+      .bg-gray-50 { background-color: white !important; }
+    }
+  `}</style>
+);
 
-    <!-- Firebase SDKs (Versão Compat) -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+// --- COMPONENTES AUXILIARES ---
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+function StatCard({ title, value, icon }) {
+  return (
+    <div className="bg-white p-6 rounded-[2rem] border shadow-sm flex items-center gap-4 hover:translate-y-[-2px] transition-transform group card-print text-gray-800">
+      <div className="p-4 bg-gray-50 rounded-2xl transition-colors group-hover:bg-primary/5 text-primary">
+        {icon}
+      </div>
+      <div>
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{title}</p>
+        <p className="text-2xl font-black tracking-tighter leading-none">{value}</p>
+      </div>
+    </div>
+  );
+}
 
-        // --- Configuração Firebase ---
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'gestao-ministerial-v1';
+function NavItem({ active, icon, label, onClick, open }) {
+  return (
+    <button onClick={onClick} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
+      active ? 'bg-primary text-white shadow-lg shadow-blue-100' : 'text-gray-500 hover:bg-gray-100 hover:text-primary'
+    }`}>
+      <div className="shrink-0">{React.cloneElement(icon, { size: 20, strokeWidth: active ? 3 : 2 })}</div>
+      {open && <span className="text-[10px] font-black uppercase tracking-tight">{label}</span>}
+    </button>
+  );
+}
 
-        // Inicialização Global
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
+function StatItem({ title, value, icon, color }) {
+  return (
+    <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col items-center justify-center text-center card-print text-gray-800">
+       <div className={`mb-3 ${color}`}>{React.cloneElement(icon, { size: 32 })}</div>
+       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{title}</p>
+       <p className={`text-4xl font-black leading-none tracking-tighter ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+// --- TELAS DE ACESSO ---
+
+function PendingScreen({ onLogout }) {
+  return (
+    <div className="h-screen bg-gray-50 flex items-center justify-center p-6 text-center text-gray-800">
+      <div className="max-w-sm bg-white p-12 rounded-[3rem] shadow-xl border border-gray-100 animate-in zoom-in">
+        <Clock className="text-yellow-500 animate-pulse mx-auto mb-4" size={60} />
+        <h1 className="text-3xl font-black mb-2 uppercase tracking-tighter leading-none">Aguardando</h1>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8">Cadastro em análise. Fale com um administrador.</p>
+        <button onClick={onLogout} className="w-full py-4 rounded-2xl border-2 border-gray-100 font-black text-[10px] text-gray-400 hover:text-red-500 uppercase tracking-widest transition-all">Sair</button>
+      </div>
+    </div>
+  );
+}
+
+function BlockedScreen({ onLogout }) {
+  return (
+    <div className="h-screen bg-red-50 flex items-center justify-center p-6 text-center text-gray-800">
+      <div className="max-w-sm bg-white p-12 rounded-[3rem] shadow-xl border-t-8 border-red-500 animate-in zoom-in">
+        <ShieldAlert className="text-red-500 mx-auto mb-4" size={60} />
+        <h1 className="text-3xl font-black text-red-600 mb-2 uppercase tracking-tighter leading-none">Suspenso</h1>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8">Acesso bloqueado por segurança.</p>
+        <button onClick={onLogout} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[11px] transition hover:shadow-lg shadow-red-100">Sair</button>
+      </div>
+    </div>
+  );
+}
+
+function AuthScreen({ onLogin, onRegister, error, isProcessing, settings }) {
+  const [mode, setMode] = useState('login');
+  const [selectedUnidade, setSelectedUnidade] = useState("");
+
+  const bannerBg = settings.loginBannerUrl 
+    ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), url(${settings.loginBannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : { backgroundColor: settings.loginBgColor || settings.primaryColor };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans text-gray-800">
+      <div className="max-w-4xl w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row border border-gray-100">
+        <div className="md:w-1/2 p-12 text-white flex flex-col justify-center relative overflow-hidden text-center transition-all duration-700" style={bannerBg}>
+          {!settings.loginBannerUrl && <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32"></div>}
+          <div className="relative z-10">
+            <div className="w-24 h-24 mx-auto mb-6 bg-white/10 rounded-full flex items-center justify-center overflow-hidden border-2 border-white/20">
+              {settings.loginIconUrl ? (
+                <img src={settings.loginIconUrl} className="w-full h-full object-cover" alt="Icon" />
+              ) : (
+                <Crown size={48} className="opacity-80 text-white" />
+              )}
+            </div>
+            <h1 className="text-4xl font-black mb-2 uppercase leading-none tracking-tighter text-white drop-shadow-lg">
+              {settings.loginTitle || "Mídia ADPerus"}
+            </h1>
+          </div>
+        </div>
+        <div className="md:w-1/2 p-12 overflow-y-auto max-h-[90vh]">
+          <div className="flex gap-2 mb-8 bg-gray-100 p-1 rounded-2xl">
+            <button onClick={() => setMode('login')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition ${mode === 'login' ? 'bg-white shadow text-primary' : 'text-gray-400'}`}>Entrar</button>
+            <button onClick={() => setMode('register')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition ${mode === 'register' ? 'bg-white shadow text-primary' : 'text-gray-400'}`}>Cadastrar</button>
+          </div>
+          
+          <form onSubmit={mode === 'login' ? onLogin : onRegister} className="space-y-4">
+            {mode === 'login' && (
+              <div className="space-y-4 animate-in fade-in slide-in-from-top-2 text-gray-800">
+                <div className="relative"><UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input name="name" placeholder="Usuário" required className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 transition text-gray-800" /></div>
+                <div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input name="password" type="password" placeholder="Senha" required className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 transition text-gray-800" /></div>
+              </div>
+            )}
+            
+            {mode === 'register' && (
+              <div className="space-y-3 animate-in fade-in slide-in-from-top-2 text-gray-800">
+                <div className="relative"><User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input name="name" placeholder="Nome Completo" required className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl outline-none font-bold text-sm text-gray-800" /></div>
+                <div className="relative"><Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input name="phone" placeholder="WhatsApp" required className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl outline-none font-bold text-sm text-gray-800" /></div>
+                <div className="relative text-gray-800"><MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><select name="unidadeType" defaultValue="" required onChange={(e) => setSelectedUnidade(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl outline-none font-bold text-xs border-2 border-transparent focus:border-primary/20"><option value="" disabled>Igreja: Regional, Setor ou Congregação?</option><option value="Regional">Regional</option><option value="Setor">Setor</option><option value="Congregação">Congregação</option></select></div>
+
+                {(selectedUnidade === "Regional" || selectedUnidade === "Setor" || selectedUnidade === "Congregação") && (
+                   <div className="relative animate-in slide-in-from-top-1 text-gray-800"><Church className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={18} /><input name="regionalName" placeholder="Nome da Regional" required className="w-full pl-12 pr-4 py-3 bg-white border-2 border-primary/20 rounded-xl outline-none font-bold text-sm text-gray-800" /></div>
+                )}
+                {(selectedUnidade === "Setor" || selectedUnidade === "Congregação") && (
+                  <div className="relative animate-in slide-in-from-top-1 text-gray-800"><Layers className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={18} /><input name="setorName" placeholder="Nome do Setor" required className="w-full pl-12 pr-4 py-3 bg-white border-2 border-primary/20 rounded-xl outline-none font-bold text-sm text-gray-800" /></div>
+                )}
+                {selectedUnidade === "Congregação" && (
+                  <div className="relative animate-in slide-in-from-top-1 text-gray-800"><Building className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={18} /><input name="congregacaoName" placeholder="Nome da Congregação" required className="w-full pl-12 pr-4 py-3 bg-white border-2 border-primary/20 rounded-xl outline-none font-bold text-sm text-gray-800" /></div>
+                )}
+
+                <div className="relative text-gray-800"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input name="password" type="password" placeholder="Criar Senha (mín. 6)" required className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl outline-none font-bold text-sm text-gray-800" /></div>
+              </div>
+            )}
+            
+            {error && <div className="p-4 bg-red-50 text-red-500 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 animate-in slide-in-from-top-2"><AlertCircle size={14}/> {error}</div>}
+            
+            <button type="submit" disabled={isProcessing} className={`w-full bg-primary text-white py-5 rounded-[1.5rem] font-black shadow-xl uppercase tracking-widest text-[11px] transition-transform active:scale-95`}>
+              {isProcessing ? "Aguarde..." : "Entrar"}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- VISÕES DE CONTEÚDO ---
+
+function DashboardView({ userProfile, attendance, events }) {
+  const [month, setMonth] = useState(new Date().getMonth());
+  const [year, setYear] = useState(new Date().getFullYear());
+
+  const filteredAtt = useMemo(() => attendance.filter(a => {
+    const d = new Date(a.timestamp);
+    return a.userId === userProfile.uid && d.getMonth() === Number(month) && d.getFullYear() === Number(year);
+  }), [attendance, userProfile.uid, month, year]);
+
+  const stats = {
+    available: filteredAtt.filter(a => a.status === 'present').length,
+    unavailable: filteredAtt.filter(a => a.status === 'absent').length,
+    escalated: filteredAtt.filter(a => a.isEscalated).length,
+    pending: events.filter(e => new Date(e.date) > new Date()).length
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in text-gray-800">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print text-gray-800">
+        <h1 className="text-3xl font-black tracking-tighter uppercase leading-none">Visão Geral</h1>
+        <div className="flex gap-2 bg-white p-2 rounded-2xl border shadow-sm">
+          <select value={month} onChange={e => setMonth(e.target.value)} className="bg-transparent text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800">{["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+          <select value={year} onChange={e => setYear(e.target.value)} className="bg-transparent text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800">{[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}</select>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title="Disponível" value={stats.available} icon={<CheckCircle className="text-green-500" />} />
+        <StatCard title="Indisponível" value={stats.unavailable} icon={<XCircle className="text-red-500" />} />
+        <StatCard title="Escalado" value={stats.escalated} icon={<ClipboardCheck className="text-purple-500" />} />
+        <StatCard title="Eventos Futuros" value={stats.pending} icon={<Clock className="text-blue-500" />} />
+      </div>
+      <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm text-gray-800">
+        <h2 className="text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2"><FileText className="text-primary" /> Histórico Ministerial</h2>
+        <div className="divide-y divide-gray-50">{filteredAtt.length > 0 ? filteredAtt.map(a => (<div key={a.id} className="py-4 flex justify-between items-center text-gray-800"><div><p className="font-bold uppercase text-xs">{a.eventName}</p><p className="text-[10px] text-gray-400 font-black uppercase tracking-tight">{a.servingDept} • {new Date(a.timestamp).toLocaleDateString()}</p></div><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>{a.status === 'present' ? "Disponível" : "Ausente"}</span></div>)) : <p className="text-gray-400 text-xs font-bold uppercase py-4">Nenhum registro este mês.</p>}</div>
+      </div>
+    </div>
+  );
+}
+
+function AgendaView({ events, attendance, userProfile, departments, category, showToast }) {
+  const [activeTab, setActiveTab] = useState('semanal');
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+  const [expandedEvent, setExpandedEvent] = useState(null);
+
+  const filteredEvents = useMemo(() => events.filter(ev => {
+    const d = new Date(ev.date);
+    if (d.getUTCMonth() !== Number(filterMonth) || d.getUTCFullYear() !== Number(filterYear)) return false;
+    if (ev.category !== category && !(ev.category === undefined && category === "Agenda Ministerial")) return false;
+    if (activeTab === 'sábados') return d.getUTCDay() === 6;
+    if (activeTab === 'domingos') return d.getUTCDay() === 0;
+    return d.getUTCDay() !== 0 && d.getUTCDay() !== 6;
+  }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, activeTab, filterMonth, filterYear, category]);
+
+  const respond = async (event, status, deptName = 'INDISPONÍVEL') => {
+    const attId = `${event.id}_${userProfile.uid}`;
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), {
+      id: attId, eventId: event.id, eventName: event.name, eventDate: event.date, eventCategory: category,
+      userId: userProfile.uid, userName: userProfile.name, servingDept: deptName,
+      status: status, isEscalated: false, timestamp: new Date().toISOString()
+    });
+    setExpandedEvent(null);
+    showToast("Confirmado!");
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in text-gray-800">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
+        <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">{category}</h1>
+        <div className="flex gap-2 bg-white p-2 rounded-2xl border shadow-sm">
+          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent text-xs font-black uppercase px-2 outline-none cursor-pointer text-gray-800">{["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+        </div>
+      </div>
+      <div className="flex gap-2 bg-white p-1 rounded-2xl border shadow-sm w-fit no-print">
+        {['semanal', 'sábados', 'domingos'].map(t => <button key={t} onClick={() => setActiveTab(t)} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>{t}</button>)}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredEvents.map(ev => {
+          const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
+          const isReady = ev.scaleStatus === 'ready';
+          return (
+            <div key={ev.id} className="bg-white rounded-[2.5rem] border p-6 shadow-sm hover:border-primary transition-all flex flex-col card-print text-gray-800">
+              <div className="flex items-center gap-4 mb-4">
+                <div className={`flex flex-col items-center justify-center text-white rounded-2xl w-16 h-16 shrink-0 shadow-lg ${isReady ? 'bg-gray-800' : 'bg-primary'}`}>
+                  <span className="text-2xl font-black leading-none">{new Date(ev.date).getUTCDate()}</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-1 text-primary font-black text-xl leading-none">
+                    <Clock size={18} /> {ev.time}
+                  </div>
+                  {isReady && <span className="text-[10px] font-black text-green-500 uppercase">Escala Pronta</span>}
+                </div>
+              </div>
+              <h3 className="text-lg font-black uppercase mb-2">{ev.name}</h3>
+              <div className="no-print mt-auto">
+                {isReady ? (
+                  myAtt?.isEscalated ? <div className="bg-green-50 p-4 rounded-2xl text-center border-2 border-green-100 text-green-700 font-black uppercase text-xs shadow-sm">Escalado: {myAtt.servingDept}</div> : <div className="bg-gray-50 p-4 rounded-2xl text-center text-gray-400 font-black uppercase text-[10px]">Não escalado</div>
+                ) : expandedEvent === ev.id ? (
+                  <div className="space-y-2">
+                    {departments.filter(d => userProfile.participatingDepts?.includes(d.id) || userProfile.role === 'master').map(d => (
+                      <button key={d.id} onClick={() => respond(ev, 'present', d.name)} className="w-full p-2 border-2 rounded-xl text-[10px] font-black uppercase text-primary hover:bg-primary/5 transition-colors" style={{ borderColor: d.color, color: d.color }}>{d.name}</button>
+                    ))}
+                    <button onClick={() => respond(ev, 'absent')} className="w-full p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase">Ausente</button>
+                    <button onClick={() => setExpandedEvent(null)} className="w-full text-xs font-black text-gray-400 mt-2">Cancelar</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setExpandedEvent(ev.id)} className="w-full py-4 bg-primary text-white rounded-2xl font-black text-[11px] uppercase shadow-lg shadow-blue-100">{myAtt ? "Alterar Resposta" : "Responder"}</button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {filteredEvents.length === 0 && <p className="col-span-full py-20 text-center text-gray-300 font-black uppercase text-xs border-2 border-dashed rounded-[3rem]">Nenhum evento agendado para este período.</p>}
+      </div>
+    </div>
+  );
+}
+
+function UserDepartments({ departments, userProfile }) {
+  const myDepts = useMemo(() => departments.filter(d => userProfile.participatingDepts?.includes(d.id)), [departments, userProfile.participatingDepts]);
+  return (
+    <div className="space-y-6 animate-in fade-in text-gray-800">
+      <h1 className="text-3xl font-black tracking-tighter uppercase leading-none">Minhas Frentes</h1>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-gray-800">
+        {myDepts.map(d => (
+          <div key={d.id} className="bg-white p-8 rounded-[2.5rem] border-l-8 shadow-sm relative overflow-hidden group text-gray-800" style={{ borderLeftColor: d.color }}>
+            <div className="flex justify-between items-start mb-6">
+              <div className="p-3 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: `${d.color}20`, color: d.color }}>
+                 {d.icon && typeof d.icon === 'string' && d.icon.startsWith('data:image') ? <img src={d.icon} className="w-8 h-8 object-cover" alt="Icon" /> : <Briefcase size={24} />}
+              </div>
+              <span className="text-[10px] font-black text-green-500 uppercase tracking-widest">Ativo</span>
+            </div>
+            <h3 className="text-xl font-black uppercase tracking-tight mb-2 leading-none">{d.name}</h3>
+            <p className="text-[10px] font-black text-primary uppercase mb-4 tracking-widest leading-none">Líder: {d.leader}</p>
+            <p className="text-xs text-gray-400 font-medium leading-relaxed">{d.description}</p>
+          </div>
+        ))}
+        {myDepts.length === 0 && <p className="col-span-full py-20 text-center text-gray-300 font-black uppercase text-xs border-2 border-dashed rounded-[3rem]">Você não participa de frentes de trabalho.</p>}
+      </div>
+    </div>
+  );
+}
+
+function ReportsView({ attendance, allUsers, departments }) {
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
+  const [memberSearch, setMemberSearch] = useState('');
+  const [selectedMember, setSelectedMember] = useState(null);
+
+  const filteredData = useMemo(() => attendance.filter(a => {
+    const d = new Date(a.timestamp);
+    return d.getMonth() === Number(filterMonth);
+  }), [attendance, filterMonth]);
+
+  const stats = useMemo(() => {
+    const total = filteredData.length;
+    const present = filteredData.filter(a => a.status === 'present').length;
+    return {
+      rate: total > 0 ? ((present / total) * 100).toFixed(0) : 0,
+      escalated: filteredData.filter(a => a.isEscalated).length,
+      agenda: filteredData.filter(a => a.eventCategory !== "Congressos" && a.status === 'present').length,
+      congress: filteredData.filter(a => a.eventCategory === "Congressos" && a.status === 'present').length
+    };
+  }, [filteredData]);
+
+  const deptStats = useMemo(() => departments.map(d => {
+    const atts = filteredData.filter(a => a.servingDept === d.name);
+    const present = atts.filter(a => a.status === 'present').length;
+    return { name: d.name, color: d.color, rate: atts.length > 0 ? ((present / atts.length) * 100).toFixed(0) : 0 };
+  }).sort((a,b) => b.rate - a.rate), [filteredData, departments]);
+
+  return (
+    <div className="space-y-8 animate-in fade-in text-gray-800 pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
+        <h2 className="text-3xl font-black uppercase tracking-tighter leading-none">Relatórios</h2>
+        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-white p-3 rounded-2xl border shadow-sm text-xs font-black uppercase outline-none cursor-pointer">{["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+         <StatItem title="Engajamento Geral" value={`${stats.rate}%`} icon={<PieChart/>} color="text-primary" />
+         <StatItem title="Agenda Ministerial" value={stats.agenda} icon={<BookOpen/>} color="text-blue-600" />
+         <StatItem title="Congressos" value={stats.congress} icon={<Trophy/>} color="text-orange-600" />
+         <StatItem title="Total Escalas" value={stats.escalated} icon={<UserCheck/>} color="text-green-600" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+         <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden flex flex-col no-print">
+            <div className="p-8 border-b bg-gray-50">
+               <h3 className="text-lg font-black uppercase tracking-tighter flex items-center gap-2"><SearchCode size={20} className="text-primary"/> Analisar Membro</h3>
+               <input type="text" placeholder="Nome do membro..." className="w-full mt-4 p-4 bg-white rounded-2xl border-2 border-transparent focus:border-primary outline-none font-bold text-sm shadow-sm" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} />
+            </div>
+            <div className="flex-1 p-4 max-h-60 overflow-y-auto space-y-2">
+               {memberSearch && allUsers.filter(u => u.name.toLowerCase().includes(memberSearch.toLowerCase())).map(u => (
+                  <button key={u.uid} onClick={() => setSelectedMember(u)} className={`w-full p-4 rounded-2xl text-left border-2 transition-all flex justify-between items-center ${selectedMember?.uid === u.uid ? 'border-primary bg-primary/5' : 'border-gray-50 bg-white'}`}>
+                     <span className="font-bold text-xs uppercase tracking-tight">{u.name}</span>
+                     <ChevronRight size={14} className="text-gray-300" />
+                  </button>
+               ))}
+            </div>
+            {selectedMember && (
+               <div className="p-8 bg-primary/5 border-t space-y-4 animate-in slide-in-from-bottom-4">
+                  <div className="flex items-center gap-3">
+                     <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-black uppercase shadow-lg">{selectedMember.name.charAt(0)}</div>
+                     <p className="font-black uppercase text-sm">{selectedMember.name}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-white rounded-xl text-center"><p className="text-[10px] font-black text-gray-400 uppercase">Escalas</p><p className="text-xl font-black text-primary">{filteredData.filter(a => a.userId === selectedMember.uid && a.isEscalated).length}</p></div>
+                    <div className="p-4 bg-white rounded-xl text-center"><p className="text-[10px] font-black text-gray-400 uppercase">Presenças</p><p className="text-xl font-black text-green-600">{filteredData.filter(a => a.userId === selectedMember.uid && a.status === 'present').length}</p></div>
+                  </div>
+               </div>
+            )}
+         </div>
+         <div className="bg-white rounded-[2.5rem] border shadow-sm p-8 flex flex-col card-print">
+            <h3 className="text-lg font-black uppercase tracking-tighter mb-6 flex items-center gap-2"><Briefcase size={20} className="text-primary"/> Ranking de Frentes</h3>
+            <div className="space-y-4 overflow-y-auto max-h-[500px] pr-2">
+               {deptStats.map(d => (
+                  <div key={d.name} className="p-4 bg-gray-50 rounded-[1.5rem] border border-transparent group">
+                     <div className="flex justify-between items-center mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-tight" style={{ color: d.color }}>{d.name}</span>
+                        <span className="text-[10px] font-black text-gray-400 uppercase">{d.rate}% engajamento</span>
+                     </div>
+                     <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner"><div className="h-full transition-all duration-1000 ease-out" style={{ width: `${d.rate}%`, backgroundColor: d.color }}></div></div>
+                  </div>
+               ))}
+            </div>
+         </div>
+      </div>
+    </div>
+  );
+}
+
+// --- ADMIN FEATURES ---
+
+function DepartmentsAdmin({ departments, showToast }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [iconPreview, setIconPreview] = useState('');
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setIconPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const payload = { name: data.get('name'), leader: data.get('leader'), description: data.get('description'), color: data.get('color'), icon: iconPreview || editing?.icon || '' };
+    if (editing) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'departments', editing.id), payload);
+    else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), payload);
+    setEditing(null); setShowAdd(false); setIconPreview('');
+    showToast("Salvo!");
+  };
+
+  return (
+    <div className="space-y-6 text-gray-800">
+      <div className="flex justify-between items-center"><h2 className="text-2xl font-black uppercase">Frentes</h2><button onClick={() => { setShowAdd(true); setIconPreview(''); }} className="bg-primary text-white p-4 rounded-2xl font-black shadow-lg flex items-center gap-2 text-white"><Plus size={20}/> Novo</button></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {departments.map(d => (
+          <div key={d.id} className="bg-white p-6 rounded-[2rem] border shadow-sm flex items-center justify-between group">
+            <div className="flex items-center gap-4 text-gray-800">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden shadow-sm" style={{ backgroundColor: `${d.color}20`, color: d.color }}>
+                {d.icon && typeof d.icon === 'string' && d.icon.startsWith('data:image') ? <img src={d.icon} className="w-full h-full object-cover" alt="Icon" /> : <Briefcase size={24}/>}
+              </div>
+              <div><h4 className="font-black uppercase text-sm">{d.name}</h4><p className="text-[10px] font-black text-gray-400 uppercase">Líder: {d.leader}</p></div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setEditing(d); setIconPreview(d.icon); }} className="p-2 text-gray-400 hover:text-primary transition"><Edit2 size={18}/></button>
+              <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'departments', d.id))} className="p-2 text-gray-400 hover:text-red-500 transition"><Trash2 size={18}/></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {(showAdd || editing) && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSave} className="bg-white p-8 rounded-[3rem] w-full max-w-md space-y-4 animate-in zoom-in text-gray-800 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex flex-col items-center gap-4 py-2 border-b"><div className="w-20 h-20 rounded-3xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center relative overflow-hidden group">{iconPreview ? <img src={iconPreview} className="w-full h-full object-cover" alt="Preview" /> : <ImageIcon className="text-gray-300" />}<input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" /></div></div>
+            <input name="name" defaultValue={editing?.name} placeholder="Nome" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" /><input name="leader" defaultValue={editing?.leader} placeholder="Líder" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" /><textarea name="description" defaultValue={editing?.description} placeholder="Descrição" className="w-full p-4 bg-gray-50 rounded-2xl font-medium outline-none h-24" /><input name="color" type="color" defaultValue={editing?.color || "#3b82f6"} className="w-full h-12 bg-transparent cursor-pointer" /><div className="flex gap-4 pt-4 text-gray-800"><button type="button" onClick={() => {setShowAdd(false); setEditing(null); setIconPreview('');}} className="flex-1 text-xs font-black uppercase text-gray-400">Cancelar</button><button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg text-white">Salvar</button></div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MembersAdmin({ allUsers, departments, showToast }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingUser, setEditingUser] = useState(null);
+  const [selectedDepts, setSelectedDepts] = useState([]);
+  const filtered = useMemo(() => allUsers.filter(u => u.name?.toLowerCase().includes(searchTerm.toLowerCase())), [allUsers, searchTerm]);
+  const toggleDept = (id) => setSelectedDepts(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const payload = { 
+       name: data.get('name'), 
+       phone: data.get('phone'), 
+       unidadeType: data.get('unidadeType'), 
+       role: data.get('role'), 
+       status: data.get('status'), 
+       isAdmin: data.get('role') !== 'user', 
+       participatingDepts: selectedDepts, 
+       isAvailable: data.get('isAvailable') === 'true' 
+    };
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', editingUser.uid), payload);
+    setEditingUser(null);
+    showToast("Sucesso!");
+  };
+
+  return (
+    <div className="space-y-6 text-gray-800">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print text-gray-800">
+         <h2 className="text-2xl font-black uppercase">Voluntários</h2>
+         <div className="relative flex-1 md:w-64 text-gray-800"><Search className="absolute left-3 top-3 text-gray-400" size={18} /><input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-white rounded-xl border border-gray-100 outline-none font-bold text-xs" /></div>
+      </div>
+      <div className="bg-white rounded-[2.5rem] border overflow-hidden shadow-sm">
+         <div className="overflow-x-auto text-gray-800"><table className="w-full text-left text-gray-800"><thead className="bg-gray-50 text-[10px] font-black uppercase tracking-widest border-b text-gray-800"><tr><th className="px-8 py-4">Membro</th><th className="px-8 py-4 text-center">Status</th><th className="px-8 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 text-gray-800">{filtered.map(u => (<tr key={u.uid} className="hover:bg-gray-50/50 group text-gray-800"><td className="px-8 py-4 text-gray-800 font-bold"><p className="font-black text-sm uppercase">{u.name}</p><p className="text-[8px] font-bold text-gray-400 uppercase">{u.unidadeType}: {u.regionalName || 'N/A'}</p></td><td className="px-8 py-4 text-center text-gray-800"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${u.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>{u.status === 'active' ? "Ativo" : "Pendente"}</span></td><td className="px-8 py-4 text-right text-gray-800"><button onClick={() => {setEditingUser(u); setSelectedDepts(u.participatingDepts || []);}} className="p-2 text-gray-400 hover:text-primary transition opacity-0 group-hover:opacity-100"><Edit2 size={16}/></button></td></tr>))}</tbody></table></div>
+      </div>
+      {editingUser && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSave} className="bg-white p-8 rounded-[3rem] w-full max-lg space-y-4 animate-in zoom-in overflow-y-auto max-h-[90vh] text-gray-800 shadow-2xl">
+            <h2 className="text-2xl font-black uppercase text-gray-800">Perfil</h2>
+            <div className="grid grid-cols-2 gap-4 text-gray-800"><input name="name" defaultValue={editingUser?.name} placeholder="Nome" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" /><input name="phone" defaultValue={editingUser?.phone} placeholder="WhatsApp" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" /><select name="role" defaultValue={editingUser?.role || "user"} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none"><option value="user">Membro</option><option value="admin">Administrador</option></select><select name="status" defaultValue={editingUser?.status || "active"} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none"><option value="active">Ativo</option><option value="pending">Pendente</option><option value="blocked">Bloqueado</option></select><select name="isAvailable" defaultValue={editingUser?.isAvailable ? 'true' : 'false'} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none"><option value="true">Disponível</option><option value="false">Indisponível</option></select></div>
+            <div className="pt-4 border-t text-gray-800"><p className="text-[10px] font-black uppercase mb-4 text-gray-400">Frentes:</p><div className="grid grid-cols-2 gap-2">{departments.map(d => (<button key={d.id} type="button" onClick={() => toggleDept(d.id)} className={`p-3 rounded-xl border-2 flex items-center justify-between transition-all ${selectedDepts.includes(d.id) ? 'bg-primary/5 border-primary text-primary' : 'bg-gray-50 border-transparent text-gray-400'}`}><span className="text-[9px] font-black uppercase">{d.name}</span>{selectedDepts.includes(d.id) && <Check size={14} />}</button>))}</div></div>
+            <div className="flex gap-4 pt-6 text-gray-800"><button type="button" onClick={() => setEditingUser(null)} className="flex-1 text-xs font-black uppercase text-gray-400 hover:text-red-500">Cancelar</button><button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg">Salvar</button></div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EventsAdmin({ events, attendance, departments, showToast }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [m, setM] = useState(new Date().getMonth());
+  const [scaleBuildingState, setScaleBuildingState] = useState(null); 
+
+  const filteredEvents = useMemo(() => events.filter(ev => new Date(ev.date).getUTCMonth() === Number(m)).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, m]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const payload = { 
+      name: data.get('name'), 
+      date: data.get('date'), 
+      time: data.get('time'), 
+      period: data.get('period'), 
+      location: data.get('location'), 
+      category: data.get('category'), 
+      scaleStatus: editing?.scaleStatus || 'draft' 
+    };
+    if (editing) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editing.id), payload);
+    else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), payload);
+    setEditing(null); setShowAdd(false);
+    showToast("Salvo!");
+  };
+
+  const markReady = async (ev, status) => {
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id), { scaleStatus: status ? 'ready' : 'draft' });
+    setScaleBuildingState(null);
+  };
+
+  const toggleEscalated = async (att) => {
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', att.id), { isEscalated: !att.isEscalated });
+  };
+
+  return (
+    <div className="space-y-6 text-gray-800">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print text-gray-800">
+        <h2 className="text-2xl font-black uppercase text-gray-800">Cronograma</h2>
+        <button onClick={() => setShowAdd(true)} className="bg-primary text-white p-4 rounded-2xl font-black shadow-lg flex items-center gap-2 uppercase text-xs">
+          <Plus size={20}/> Novo
+        </button>
+      </div>
+      <div className="bg-white rounded-[2.5rem] border overflow-hidden shadow-sm">
+        <div className="overflow-x-auto"><table className="w-full text-left text-gray-800"><thead className="bg-gray-50 text-[10px] font-black uppercase tracking-widest border-b"><tr><th className="px-8 py-4">Evento</th><th className="px-8 py-4 text-center">Status</th><th className="px-8 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100">{filteredEvents.map(ev => (<tr key={ev.id} className="hover:bg-gray-50/50 transition group"><td className="px-8 py-4"><p className="font-black text-sm uppercase">{ev.name}</p><p className="text-[9px] font-bold text-gray-400 uppercase">{new Date(ev.date).toLocaleDateString('pt-PT', {timeZone: 'UTC'})}</p></td><td className="px-8 py-4 text-center"><div className="flex items-center justify-center gap-2"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${ev.scaleStatus === 'ready' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>{ev.scaleStatus === 'ready' ? 'Ativa' : 'Rascunho'}</span><button onClick={() => setScaleBuildingState({ event: ev, step: 'depts' })} className="text-primary hover:underline text-[10px] font-black uppercase">Montar</button></div></td><td className="px-8 py-4 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => setEditing(ev)} className="p-2 text-gray-400 hover:text-primary transition"><Edit2 size={18}/></button><button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id))} className="p-2 text-gray-400 hover:text-red-500 transition"><Trash2 size={18}/></button></div></td></tr>))}</tbody></table></div>
+      </div>
+      
+      {scaleBuildingState && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in flex flex-col max-h-[90vh]">
+            <div className="p-8 border-b bg-gray-50 flex justify-between items-center shrink-0">
+              <div><h2 className="text-2xl font-black uppercase">{scaleBuildingState.step === 'depts' ? "Escolher Frente" : `Escalar: ${scaleBuildingState.dept.name}`}</h2></div>
+              <button onClick={() => setScaleBuildingState(null)} className="p-3 bg-white rounded-full shadow-sm"><X size={24} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-8">
+              {scaleBuildingState.step === 'depts' ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {departments.map(dept => (
+                      <button key={dept.id} onClick={() => setScaleBuildingState({ ...scaleBuildingState, dept, step: 'members' })} className="w-full p-6 rounded-[2rem] border-2 transition-all text-left flex items-center gap-4 bg-gray-50 border-transparent hover:border-primary shadow-sm">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: `${dept.color}20`, color: dept.color }}>
+                          {dept.icon && typeof dept.icon === 'string' && dept.icon.startsWith('data:image') ? <img src={dept.icon} className="w-full h-full object-cover rounded-lg" alt="Icon" /> : <Briefcase size={20}/>}
+                        </div>
+                        <div className="flex-1"><p className="font-black uppercase text-xs tracking-tight">{dept.name}</p></div>
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => markReady(scaleBuildingState.event, scaleBuildingState.event.scaleStatus !== 'ready')} className={`w-full py-5 rounded-[2rem] font-black uppercase text-xs tracking-widest transition-all text-white shadow-xl ${scaleBuildingState.event.scaleStatus === 'ready' ? 'bg-orange-500' : 'bg-green-600'}`}>{scaleBuildingState.event.scaleStatus === 'ready' ? "Reverter Rascunho" : "Publicar Escala Agora"}</button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <button onClick={() => setScaleBuildingState({ ...scaleBuildingState, step: 'depts' })} className="flex items-center gap-2 text-[10px] font-black text-primary uppercase transition-colors hover:text-primary/60">
+                    <ChevronDown className="rotate-90" size={14} /> Voltar
+                  </button>
+                  {attendance.filter(a => a.eventId === scaleBuildingState.event.id && a.servingDept === scaleBuildingState.dept.name && a.status === 'present').map(att => (
+                    <div key={att.id} className={`p-4 bg-white border-2 rounded-2xl flex items-center justify-between transition-all ${att.isEscalated ? 'border-green-200 bg-green-50/20' : 'border-gray-100 bg-gray-50/30'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black uppercase shadow-sm ${att.isEscalated ? 'bg-green-500' : 'bg-gray-300'}`}>{att.userName.charAt(0)}</div>
+                        <p className="font-black uppercase text-sm tracking-tight text-gray-700">{att.userName}</p>
+                      </div>
+                      <button onClick={() => toggleEscalated(att)} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all text-white shadow-md ${att.isEscalated ? 'bg-green-600' : 'bg-primary'}`}>{att.isEscalated ? "Remover" : "Confirmar"}</button>
+                    </div>
+                  ))}
+                  {attendance.filter(a => a.eventId === scaleBuildingState.event.id && a.servingDept === scaleBuildingState.dept.name && a.status === 'present').length === 0 && <p className="text-center py-10 text-gray-400 text-xs font-bold uppercase">Ninguém disponível nesta frente ainda.</p>}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(showAdd || editing) && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSave} className="bg-white p-8 rounded-[3rem] w-full max-w-md space-y-4 animate-in zoom-in text-gray-800 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <h2 className="text-2xl font-black uppercase">Evento</h2>
+            <select name="category" defaultValue={editing?.category || 'Agenda Ministerial'} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary">
+              <option value="Agenda Ministerial">Agenda Ministerial</option>
+              <option value="Congressos">Congressos</option>
+            </select>
+            <input name="name" defaultValue={editing?.name} placeholder="Nome" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+            <div className="grid grid-cols-2 gap-2">
+              <input name="date" type="date" defaultValue={editing?.date} required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+              <input name="time" type="time" defaultValue={editing?.time} required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+            </div>
+            <input name="location" defaultValue={editing?.location} placeholder="Local" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+            <input name="period" defaultValue={editing?.period} placeholder="Período" required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+            <div className="flex gap-4 pt-4">
+              <button type="button" onClick={() => {setShowAdd(false); setEditing(null)}} className="flex-1 text-xs font-black uppercase text-gray-400">Cancelar</button>
+              <button type="submit" className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg">Salvar</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SettingsAdminView({ settings, onUpdate, showToast }) {
+  const [iconPreview, setIconPreview] = useState(settings.loginIconUrl || '');
+  
+  const handleIconUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => { 
+        setIconPreview(reader.result); 
+        onUpdate({ ...settings, loginIconUrl: reader.result }); 
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto bg-white p-10 rounded-[3rem] border shadow-sm space-y-8 animate-in slide-in-from-bottom-8 text-gray-800">
+      <h2 className="text-2xl font-black text-primary flex items-center gap-2 uppercase tracking-tighter leading-none"><Palette /> Personalizar</h2>
+      <div className="space-y-6">
+        <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Nome do Portal</label><input value={settings.siteName} onChange={e => onUpdate({...settings, siteName: e.target.value})} placeholder="Ex: Portal Gileade" className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition text-gray-800 shadow-sm" /></div>
+        <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Cor Principal</label><input type="color" value={settings.primaryColor} onChange={e => onUpdate({...settings, primaryColor: e.target.value})} className="w-full h-14 bg-transparent cursor-pointer rounded-2xl" /></div>
+        <div className="pt-4 border-t border-gray-100 space-y-6">
+           <h3 className="text-sm font-black uppercase text-gray-400 mb-4 tracking-tighter">Login Customizado</h3>
+           <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Nome no Login</label><input value={settings.loginTitle || ''} onChange={e => onUpdate({...settings, loginTitle: e.target.value})} placeholder="Ex: Mídia ADPerus" className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-primary transition shadow-sm" /></div>
+           <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Ícone do Login (Upload)</label><div className="flex items-center gap-4"><div className="w-16 h-16 rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden">{iconPreview ? <img src={iconPreview} className="w-full h-full object-cover" alt="Preview" /> : <ImageIcon className="text-gray-300" />}</div><label className="flex-1"><div className="p-4 bg-gray-50 rounded-2xl border-2 border-transparent hover:border-primary transition cursor-pointer text-center text-xs font-bold text-gray-500 uppercase shadow-sm">Fazer Upload</div><input type="file" onChange={handleIconUpload} className="hidden" accept="image/*" /></label></div></div>
+           <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Cor de Fundo do Login</label><input type="color" value={settings.loginBgColor || settings.primaryColor} onChange={e => onUpdate({...settings, loginBgColor: e.target.value})} className="w-full h-14 bg-transparent cursor-pointer rounded-2xl" /></div>
+           <div><label className="text-[10px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Banner de Fundo (Login URL)</label><input value={settings.loginBannerUrl || ''} onChange={e => onUpdate({...settings, loginBannerUrl: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl font-medium text-xs border-2 border-transparent focus:border-primary transition shadow-sm" placeholder="Cole o link da imagem (ex: Imgur)" /></div>
+        </div>
+        <button onClick={() => showToast("Ajustes salvos!")} className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg tracking-widest transition-transform active:scale-95">Salvar Configurações</button>
+      </div>
+    </div>
+  );
+}
+
+// --- Main App Implementation ---
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [view, setView] = useState('dashboard');
+  const [toast, setToast] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
+  const [settings, setSettings] = useState({
+    siteName: 'Portal Ministerial',
+    primaryColor: '#3b82f6',
+    logoUrl: '',
+    loginBannerUrl: '',
+    loginIconUrl: '',
+    loginTitle: 'Mídia ADPerus',
+    loginBgColor: '#3b82f6',
+    modules: { events: true, attendance: true }
+  });
+
+  const [allUsers, setAllUsers] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [authError, setAuthError] = useState('');
+  const [isAuthProcessing, setIsAuthProcessing] = useState(false);
+
+  const showToast = (message, type = 'success') => { 
+    setToast({ message, type }); 
+    setTimeout(() => setToast(null), 3000); 
+  };
+
+  const notifications = useMemo(() => {
+    if (!userProfile) return [];
+    return events.filter(e => e.scaleStatus === 'ready' && attendance.some(a => a.eventId === e.id && a.userId === userProfile.uid && a.isEscalated));
+  }, [events, attendance, userProfile]);
+
+  // Auth Initialization
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
         }
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+        setIsAuthReady(true);
+      } catch (err) { 
+        setIsAuthReady(true); 
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (!u) { 
+        setUserProfile(null); 
+        setLoading(false); 
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
-        // --- Ícones Robustos (SVG Inline corrigido) ---
-        const Icon = ({ name, size = 20, className = "" }) => {
-            const icons = {
-                dashboard: <path d="M3 3v18h18M7 16v-4m4 4V9m4 7V5m4 11v-2" />,
-                users: <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 7a4 4 0 0 1 0-8 4 4 0 0 1 0 8m14 14v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />,
-                calendar: (
-                    <React.Fragment>
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                        <path d="M16 2v4M8 2v4M3 10h18" />
-                    </React.Fragment>
-                ),
-                check: <polyline points="20 6 9 17 4 12" />,
-                settings: (
-                    <React.Fragment>
-                        <circle cx="12" cy="12" r="3" />
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                    </React.Fragment>
-                ),
-                logout: (
-                    <React.Fragment>
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                        <polyline points="16 17 21 12 16 7" />
-                        <line x1="21" y1="12" x2="9" y2="12" />
-                    </React.Fragment>
-                ),
-                plus: (
-                    <React.Fragment>
-                        <line x1="12" y1="5" x2="12" y2="19" />
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                    </React.Fragment>
-                ),
-                trash: (
-                    <React.Fragment>
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    </React.Fragment>
-                ),
-                book: (
-                    <React.Fragment>
-                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                        <path d="M4 19.5V4a2.5 2.5 0 0 1 2.5-2.5H20" />
-                        <path d="M4 19.5H20" />
-                    </React.Fragment>
-                ),
-                trophy: (
-                    <React.Fragment>
-                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                        <path d="M4 22h16" />
-                        <path d="M10 14.66V17c0 .55.47.98.97 1.21C11.59 18.47 12 19 12 19.5V22" />
-                        <path d="M10 14.66V10a8 8 0 0 1 16 0v4.66" />
-                        <path d="M12 22v-2.5" />
-                    </React.Fragment>
-                ),
-                chart: (
-                    <React.Fragment>
-                        <line x1="12" y1="20" x2="12" y2="10" />
-                        <line x1="18" y1="20" x2="18" y2="4" />
-                        <line x1="6" y1="20" x2="6" y2="16" />
-                    </React.Fragment>
-                ),
-                user: (
-                    <React.Fragment>
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                    </React.Fragment>
-                ),
-                menu: (
-                    <React.Fragment>
-                        <line x1="3" y1="12" x2="21" y2="12" />
-                        <line x1="3" y1="6" x2="21" y2="6" />
-                        <line x1="3" y1="18" x2="21" y2="18" />
-                    </React.Fragment>
-                )
-            };
-            return (
-                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                    {icons[name] || <circle cx="12" cy="12" r="10" />}
-                </svg>
-            );
+  // Data Listeners
+  useEffect(() => {
+    if (!isAuthReady || !user) return;
+    
+    const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), (snap) => {
+      if (snap.exists()) setUserProfile(snap.data());
+      setLoading(false);
+    }, () => setLoading(false));
+
+    const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), (snap) => {
+      if (snap.exists()) setSettings(snap.data());
+    });
+
+    const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), snap => {
+      setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), snap => {
+      setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), snap => {
+      setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), snap => {
+      setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => { 
+      unsubProfile(); unsubSettings(); unsubUsers(); 
+      unsubEvents(); unsubAtt(); unsubDepts(); 
+    };
+  }, [isAuthReady, user]);
+
+  const handleLogout = async () => { 
+    await signOut(auth); 
+    setView('dashboard'); 
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setIsAuthProcessing(true);
+    
+    const formElements = e.target.elements;
+    const inputName = formElements.name?.value || "";
+    const inputPassword = formElements.password?.value || "";
+
+    // Lógica Master Fixa: Usa conta de e-mail oculta para evitar erro de login anônimo desativado
+    if (inputPassword === 'adperus2026') {
+      const masterEmail = "master_admin@adperus.com";
+      try {
+        try {
+          await signInWithEmailAndPassword(auth, masterEmail, 'adperus2026');
+        } catch (err) {
+          // Se não existir, tenta criar (ocorre apenas no primeiro uso absoluto do app)
+          if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-email') {
+             await createUserWithEmailAndPassword(auth, masterEmail, 'adperus2026');
+          } else {
+             throw err;
+          }
+        }
+        
+        const curUser = auth.currentUser;
+        const profile = {
+          uid: curUser.uid, 
+          name: inputName || "Admin Master", 
+          email: masterEmail, 
+          role: 'master', 
+          status: 'active', 
+          isAdmin: true, 
+          isAvailable: true, 
+          joinDate: new Date().toISOString(), 
+          participatingDepts: []
         };
 
-        // --- Componentes Atómicos ---
-        function StatCard({ title, value, icon, colorClass }) {
-            return (
-                <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col items-center justify-center text-center group hover:border-blue-400 transition-all">
-                    <div className={`mb-3 p-4 bg-gray-50 rounded-[1.5rem] transition-colors group-hover:bg-blue-50 ${colorClass}`}>
-                        {icon}
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1.5">{title}</p>
-                        <p className="text-3xl font-black tracking-tighter leading-none text-gray-800">{value}</p>
-                    </div>
-                </div>
-            );
-        }
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', curUser.uid), profile);
+        setUserProfile(profile);
+        setIsAuthProcessing(false);
+        return;
+      } catch (err) {
+        console.error("Master login error:", err);
+        setAuthError('Falha ao autenticar administrador.');
+        setIsAuthProcessing(false);
+        return;
+      }
+    }
 
-        function NavItem({ active, icon, label, onClick, open }) {
-            return (
-                <button onClick={onClick} className={`w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
-                    active ? 'bg-blue-600 text-white shadow-xl scale-[1.02]' : 'text-gray-500 hover:bg-gray-100 hover:text-blue-600 active:scale-95'
-                }`}>
-                    <div className="shrink-0">{icon}</div>
-                    {open && <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>}
-                </button>
-            );
-        }
+    // Login Padrão de Membro
+    try {
+      const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'users'));
+      const uFound = snap.docs.map(d => d.data()).find(u => u.name?.trim().toLowerCase() === inputName.trim().toLowerCase());
+      if (!uFound) {
+        setAuthError('Usuário não encontrado.');
+        setIsAuthProcessing(false);
+        return;
+      }
+      await signInWithEmailAndPassword(auth, uFound.email, inputPassword);
+    } catch (err) {
+      setAuthError('Senha inválida ou erro de acesso.');
+    } finally {
+      setIsAuthProcessing(false);
+    }
+  };
 
-        // --- App Principal ---
-        function App() {
-            const [user, setUser] = useState(null);
-            const [userProfile, setUserProfile] = useState(null);
-            const [loading, setLoading] = useState(true);
-            const [isAuthReady, setIsAuthReady] = useState(false);
-            const [view, setView] = useState('dashboard');
-            
-            const [allUsers, setAllUsers] = useState([]);
-            const [events, setEvents] = useState([]);
-            const [attendance, setAttendance] = useState([]);
-            const [departments, setDepartments] = useState([]);
-            const [settings, setSettings] = useState({ siteName: 'Portal Ministerial', primaryColor: '#3b82f6' });
-            
-            const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-            const [authError, setAuthError] = useState('');
-            const [isAuthProcessing, setIsAuthProcessing] = useState(false);
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setIsAuthProcessing(true);
+    const form = e.target.elements;
+    const inputPassword = form.password?.value || "";
+    const inputName = form.name?.value || "";
 
-            // REGRA 3: Autenticação antes de Consultas
-            useEffect(() => {
-                const initAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await auth.signInWithCustomToken(__initial_auth_token);
-                        } else if (!auth.currentUser) {
-                            await auth.signInAnonymously();
-                        }
-                    } catch (err) {
-                        console.error("Auth error", err);
-                    }
-                };
+    if (inputPassword.length < 6) {
+      setAuthError('Senha deve ter no mínimo 6 caracteres.');
+      setIsAuthProcessing(false);
+      return;
+    }
+    try {
+      const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'users'));
+      const exists = snap.docs.some(d => d.data().name?.trim().toLowerCase() === inputName.trim().toLowerCase());
+      if (exists) {
+        setAuthError('Este nome de usuário já está em uso.');
+        setIsAuthProcessing(false);
+        return;
+      }
+      const email = `${inputName.replace(/\s+/g, '').toLowerCase()}_${Date.now()}@portal.com`;
+      const res = await createUserWithEmailAndPassword(auth, email, inputPassword);
+      
+      const isFirst = snap.empty;
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', res.user.uid), {
+        uid: res.user.uid,
+        name: inputName,
+        email,
+        phone: form.phone?.value || "",
+        unidadeType: form.unidadeType?.value || "Regional",
+        regionalName: form.regionalName?.value || "",
+        setorName: form.setorName?.value || "",
+        congregacaoName: form.congregacaoName?.value || "",
+        status: isFirst ? 'active' : 'pending',
+        role: isFirst ? 'master' : 'user',
+        isAdmin: isFirst,
+        isAvailable: true,
+        joinDate: new Date().toISOString(),
+        participatingDepts: []
+      });
+    } catch (err) {
+      setAuthError('Erro ao criar conta.');
+    } finally {
+      setIsAuthProcessing(false);
+    }
+  };
 
-                const unsubscribe = auth.onAuthStateChanged((u) => {
-                    setUser(u);
-                    setIsAuthReady(true);
-                });
+  if (loading && user) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <RefreshCw className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
 
-                initAuth();
-                return () => unsubscribe();
-            }, []);
+  if (!user || !userProfile) {
+    return (
+      <AuthScreen 
+        settings={settings} 
+        onLogin={handleLogin} 
+        onRegister={handleRegister} 
+        error={authError} 
+        isProcessing={isAuthProcessing} 
+      />
+    );
+  }
 
-            // Data Fetching com Guardas de Permissão
-            useEffect(() => {
-                if (!isAuthReady || !user) return;
+  if (userProfile.status === 'pending') return <PendingScreen onLogout={handleLogout} />;
+  if (userProfile.status === 'blocked') return <BlockedScreen onLogout={handleLogout} />;
 
-                const usersPath = `artifacts/${appId}/public/data/users`;
-                const eventsPath = `artifacts/${appId}/public/data/events`;
-                const attPath = `artifacts/${appId}/public/data/attendance`;
-                const deptsPath = `artifacts/${appId}/public/data/departments`;
-                const settingsPath = `artifacts/${appId}/public/data/settings`;
+  return (
+    <div className="flex h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden">
+      <CustomStyles primaryColor={settings.primaryColor} />
+      
+      {toast && (
+        <div className={`fixed bottom-8 right-8 z-[100] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white`}>
+          {toast.type === 'success' ? <CheckCircle size={20}/> : <AlertCircle size={20}/>}
+          <span className="text-xs font-black uppercase tracking-widest">{toast.message}</span>
+        </div>
+      )}
 
-                // Listener de Perfil
-                const unsubProfile = db.doc(`${usersPath}/${user.uid}`)
-                    .onSnapshot((snap) => {
-                        if (snap.exists) setUserProfile(snap.data());
-                        setLoading(false);
-                    }, (err) => console.warn("Acesso perfil negado ou em progresso."));
+      <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white border-r transition-all duration-300 flex flex-col z-30 no-print`}>
+        <div className="h-20 flex items-center px-6 border-b overflow-hidden gap-3 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-black shrink-0 shadow-lg overflow-hidden text-sm uppercase">
+            {settings.loginIconUrl ? <img src={settings.loginIconUrl} className="w-full h-full object-cover" alt="Logo" /> : settings.siteName.charAt(0)}
+          </div>
+          {isSidebarOpen && <span className="font-bold text-lg truncate text-primary uppercase tracking-tighter">{settings.siteName}</span>}
+        </div>
+        
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <NavItem active={view === 'dashboard'} icon={<LayoutDashboard />} label="Dashboard" onClick={() => setView('dashboard')} open={isSidebarOpen} />
+          <NavItem active={view === 'agenda'} icon={<BookOpen />} label="Agenda Ministerial" onClick={() => setView('agenda')} open={isSidebarOpen} />
+          <NavItem active={view === 'congressos'} icon={<Trophy />} label="Congressos" onClick={() => setView('congressos')} open={isSidebarOpen} />
+          <NavItem active={view === 'my_depts'} icon={<Layers />} label="Minhas Frentes" onClick={() => setView('my_depts')} open={isSidebarOpen} />
+          
+          {userProfile.isAdmin && (
+            <div className="pt-6 border-t mt-4">
+              <p className={`text-[9px] font-black text-gray-400 uppercase mb-2 px-3 ${!isSidebarOpen && 'hidden'}`}>Administração</p>
+              <NavItem active={view === 'events_admin'} icon={<Calendar />} label="Cronograma" onClick={() => setView('events_admin')} open={isSidebarOpen} />
+              <NavItem active={view === 'users'} icon={<Users />} label="Voluntários" onClick={() => setView('users')} open={isSidebarOpen} />
+              <NavItem active={view === 'depts_admin'} icon={<Briefcase />} label="Frentes" onClick={() => setView('depts_admin')} open={isSidebarOpen} />
+              <NavItem active={view === 'reports'} icon={<BarChart3 />} label="Relatórios" onClick={() => setView('reports')} open={isSidebarOpen} />
+              <NavItem active={view === 'settings'} icon={<Settings />} label="Personalizar" onClick={() => setView('settings')} open={isSidebarOpen} />
+            </div>
+          )}
+        </nav>
+        
+        <div className="p-4 border-t">
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 text-red-500 hover:bg-red-50 rounded-xl transition font-black text-[10px] uppercase">
+            <LogOut size={20} /> {isSidebarOpen && "Sair"}
+          </button>
+        </div>
+      </aside>
 
-                // Outros Listeners
-                const unsubUsers = db.collection(usersPath).onSnapshot(s => setAllUsers(s.docs.map(d => ({id: d.id, ...d.data()}))), e => {});
-                const unsubEvents = db.collection(eventsPath).onSnapshot(s => setEvents(s.docs.map(d => ({id: d.id, ...d.data()}))), e => {});
-                const unsubAtt = db.collection(attPath).onSnapshot(s => setAttendance(s.docs.map(d => ({id: d.id, ...d.data()}))), e => {});
-                const unsubDepts = db.collection(deptsPath).onSnapshot(s => setDepartments(s.docs.map(d => ({id: d.id, ...d.data()}))), e => {});
-                const unsubSettings = db.doc(`${settingsPath}/general`).onSnapshot(s => s.exists && setSettings(s.data()), e => {});
+      <main className="flex-1 flex flex-col min-w-0 bg-gray-50/50">
+        <header className="h-20 bg-white border-b px-8 flex items-center justify-between shrink-0 no-print shadow-sm">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <Menu size={20} />
+            </button>
+            {notifications.length > 0 && (
+              <div className="flex items-center gap-2 bg-green-100 px-3 py-1.5 rounded-full animate-bounce shadow-sm">
+                <Bell size={14} className="text-green-600" />
+                <span className="text-[9px] font-black text-green-600 uppercase">Você foi escalado!</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-right">
+            <div className="hidden sm:block">
+              <p className="text-sm font-bold leading-none">{userProfile.name}</p>
+              <p className="text-[10px] text-gray-400 uppercase font-black mt-1 tracking-widest">{userProfile.role}</p>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-gray-100 border flex items-center justify-center text-gray-400 overflow-hidden">
+              <UserCircle size={24} />
+            </div>
+          </div>
+        </header>
 
-                return () => { unsubProfile(); unsubUsers(); unsubEvents(); unsubAtt(); unsubDepts(); unsubSettings(); };
-            }, [isAuthReady, user]);
-
-            const handleLogout = async () => {
-                await auth.signOut();
-                setUserProfile(null);
-                await auth.signInAnonymously();
-                setView('dashboard');
-            };
-
-            const handleLogin = async (e) => {
-                e.preventDefault();
-                setAuthError('');
-                setIsAuthProcessing(true);
-                const nameInput = e.target.name.value.trim().toLowerCase();
-                const pass = e.target.password.value;
-                const found = allUsers.find(u => u.name?.toLowerCase() === nameInput);
-                if (found) {
-                    try { await auth.signInWithEmailAndPassword(found.email, pass); }
-                    catch (err) { setAuthError("Senha incorreta."); }
-                } else { setAuthError("Voluntário não encontrado."); }
-                setIsAuthProcessing(false);
-            };
-
-            const handleRegister = async (e) => {
-                e.preventDefault();
-                setAuthError('');
-                setIsAuthProcessing(true);
-                const { name, unidadeType, regionalName, setorName, congregacaoName, password } = e.target.elements;
-                if (password.value.length < 6) {
-                    setAuthError("Senha deve ter 6+ chars.");
-                    setIsAuthProcessing(false);
-                    return;
-                }
-                
-                const email = `${name.value.replace(/\s+/g, '').toLowerCase()}_${Date.now()}@portal.com`;
-                try {
-                    const res = await auth.createUserWithEmailAndPassword(email, password.value);
-                    const path = `artifacts/${appId}/public/data/users/${res.user.uid}`;
-                    await db.doc(path).set({
-                        uid: res.user.uid, name: name.value, email, 
-                        unidadeType: unidadeType.value, regionalName: regionalName?.value || "",
-                        setorName: setorName?.value || "", congregacaoName: congregacaoName?.value || "",
-                        status: 'pending', role: 'user', isAdmin: false, isAvailable: true, joinDate: new Date().toISOString(),
-                        participatingDepts: []
-                    });
-                } catch (err) { setAuthError("Erro no cadastro."); }
-                setIsAuthProcessing(false);
-            };
-
-            const handleAdminLogin = async (e) => {
-                e.preventDefault();
-                if (e.target.adminPassword.value === '123') {
-                    const path = `artifacts/${appId}/public/data/users/${user.uid}`;
-                    await db.doc(path).set({
-                        uid: user.uid, name: "Admin Master", email: "admin@portal.com", role: 'master', status: 'active', isAdmin: true, isAvailable: true,
-                        unidadeType: 'Geral', regionalName: 'Sede', participatingDepts: []
-                    });
-                } else { setAuthError("Senha mestre inválida."); }
-            };
-
-            if (loading && user && userProfile) return (
-                <div className="h-screen flex items-center justify-center bg-gray-50">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                </div>
-            );
-
-            if (!user || !userProfile) {
-                return (
-                    <AuthScreen 
-                        error={authError} 
-                        isProcessing={isAuthProcessing}
-                        onLogin={handleLogin}
-                        onRegister={handleRegister}
-                        onAdminLogin={handleAdminLogin}
-                    />
-                );
-            }
-
-            return (
-                <div className="flex h-screen bg-gray-50 overflow-hidden text-sm">
-                    <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white border-r transition-all duration-300 flex flex-col z-30 shadow-sm`}>
-                        <div className="h-20 flex items-center px-6 border-b shrink-0">
-                            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black">
-                                {settings.siteName.charAt(0)}
-                            </div>
-                            {isSidebarOpen && <span className="ml-3 font-bold text-lg text-blue-600 uppercase tracking-tighter truncate">{settings.siteName}</span>}
-                        </div>
-                        <nav className="flex-1 p-4 space-y-2 overflow-y-auto scrollbar-hide">
-                            <NavItem active={view === 'dashboard'} icon={<Icon name="dashboard"/>} label="Dashboard" onClick={() => setView('dashboard')} open={isSidebarOpen} />
-                            <NavItem active={view === 'agenda'} icon={<Icon name="book"/>} label="Agenda Ministerial" onClick={() => setView('agenda')} open={isSidebarOpen} />
-                            <NavItem active={view === 'congressos'} icon={<Icon name="trophy"/>} label="Congressos" onClick={() => setView('congressos')} open={isSidebarOpen} />
-                            
-                            {userProfile.isAdmin && (
-                                <div className="pt-6 border-t mt-4">
-                                    <NavItem active={view === 'events_admin'} icon={<Icon name="calendar"/>} label="Gestão Eventos" onClick={() => setView('events_admin')} open={isSidebarOpen} />
-                                    <NavItem active={view === 'users'} icon={<Icon name="users"/>} label="Membros" onClick={() => setView('users')} open={isSidebarOpen} />
-                                    <NavItem active={view === 'reports'} icon={<Icon name="chart"/>} label="Relatórios & BI" onClick={() => setView('reports')} open={isSidebarOpen} />
-                                </div>
-                            )}
-                        </nav>
-                        <div className="p-4 border-t">
-                            <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 text-red-500 hover:bg-red-50 rounded-xl font-black text-[10px] uppercase">
-                                <Icon name="logout"/> {isSidebarOpen && "Sair"}
-                            </button>
-                        </div>
-                    </aside>
-
-                    <main className="flex-1 flex flex-col min-w-0">
-                        <header className="h-20 bg-white border-b px-8 flex items-center justify-between shrink-0">
-                            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg"><Icon name="menu" /></button>
-                            <div className="flex items-center gap-3 text-right">
-                                <div className="hidden sm:block">
-                                    <p className="text-sm font-bold text-gray-800">{userProfile.name}</p>
-                                    <p className="text-[10px] text-gray-400 uppercase font-black leading-none">{userProfile.role}</p>
-                                </div>
-                                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-                                    <Icon name="user" size={24} className="text-gray-300" />
-                                </div>
-                            </div>
-                        </header>
-                        <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
-                            {view === 'dashboard' && <DashboardView userProfile={userProfile} attendance={attendance} events={events} />}
-                            {view === 'reports' && <ReportsView allUsers={allUsers} attendance={attendance} departments={departments} />}
-                            {(view === 'agenda' || view === 'congressos') && (
-                                <AgendaView events={events} attendance={attendance} userProfile={userProfile} departments={departments} category={view === 'agenda' ? "Agenda Ministerial" : "Congressos"} />
-                            )}
-                            {view === 'events_admin' && <EventsAdminView events={events} attendance={attendance} departments={departments} />}
-                            {view === 'users' && <UsersAdminView allUsers={allUsers} departments={departments} />}
-                        </div>
-                    </main>
-                </div>
-            );
-        }
-
-        // --- SUB-VISTAS ---
-
-        function DashboardView({ userProfile, attendance, events }) {
-            const filtered = attendance.filter(a => a.userId === userProfile.uid);
-            return (
-                <div className="space-y-6 animate-in">
-                    <h1 className="text-3xl font-black uppercase tracking-tighter text-gray-800">Painel Geral</h1>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <StatCard title="Disponível" value={filtered.filter(a => a.status === 'present').length} icon={<Icon name="checkSquare" size={24}/>} colorClass="text-green-500" />
-                        <StatCard title="Indisponível" value={filtered.filter(a => a.status === 'absent').length} icon={<Icon name="trash" size={24}/>} colorClass="text-red-500" />
-                        <StatCard title="Escalado" value={filtered.filter(a => a.isEscalated).length} icon={<Icon name="check" size={24}/>} colorClass="text-purple-500" />
-                        <StatCard title="Eventos Ativos" value={events.length} icon={<Icon name="calendar" size={24}/>} colorClass="text-blue-500" />
-                    </div>
-                </div>
-            );
-        }
-
-        function ReportsView({ allUsers, attendance, departments }) {
-            const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
-            const [filterYear, setFilterYear] = useState(new Date().getFullYear());
-
-            const filteredData = attendance.filter(a => {
-                const d = new Date(a.timestamp);
-                return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
-            });
-
-            return (
-                <div className="space-y-8 animate-in pb-12">
-                    <div className="flex justify-between items-center border-b pb-6">
-                        <h2 className="text-3xl font-black uppercase tracking-tighter text-gray-800">BI Ministerial</h2>
-                        <div className="flex gap-2 bg-white p-2 rounded-2xl border shadow-sm">
-                            <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-transparent text-xs font-black uppercase outline-none px-2 cursor-pointer">
-                                {["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"].map((m, i) => <option key={i} value={i}>{m}</option>)}
-                            </select>
-                            <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-transparent text-xs font-black uppercase outline-none px-2 cursor-pointer">
-                                {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-center">
-                        <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm">
-                            <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Presença Geral</p>
-                            <p className="text-4xl font-black text-blue-600">{filteredData.length > 0 ? ((filteredData.filter(a => a.status === 'present').length / filteredData.length) * 100).toFixed(0) : 0}%</p>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        function AgendaView({ events, attendance, userProfile, departments, category }) {
-            const filtered = events.filter(e => e.category === category || (!e.category && category === "Agenda Ministerial"));
-            
-            const handleRespond = async (ev, status, deptId = null) => {
-                const dept = departments.find(d => d.id === deptId);
-                const attId = `${ev.id}_${userProfile.uid}`;
-                const path = `artifacts/${appId}/public/data/attendance/${attId}`;
-                await db.doc(path).set({
-                    id: attId, eventId: ev.id, eventName: ev.name, eventDate: ev.date, eventCategory: category,
-                    userId: userProfile.uid, userName: userProfile.name, servingDept: dept ? dept.name : 'N/A',
-                    status, isEscalated: false, timestamp: new Date().toISOString()
-                });
-            };
-
-            return (
-                <div className="space-y-6 animate-in">
-                    <h1 className="text-3xl font-black uppercase tracking-tighter text-gray-800">{category}</h1>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filtered.map(ev => {
-                            const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
-                            const isReady = ev.scaleStatus === 'ready';
-                            return (
-                                <div key={ev.id} className={`bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col group ${isReady && myAtt?.isEscalated ? 'ring-2 ring-green-500' : ''}`}>
-                                    <div className="flex items-center gap-4 mb-4">
-                                        <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black text-xl">
-                                            {new Date(ev.date).getUTCDate()}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="font-black uppercase text-sm leading-none text-gray-700">{ev.name}</p>
-                                            <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase tracking-widest">{ev.time} • {ev.period}</p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-auto pt-4 border-t">
-                                        {myAtt ? (
-                                            <div className={`p-4 rounded-2xl text-center font-black text-[10px] uppercase ${myAtt.status === 'present' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                                                {myAtt.status === 'present' ? `Vou em: ${myAtt.servingDept}` : 'Indisponível'}
-                                            </div>
-                                        ) : isReady ? (
-                                            <div className="bg-gray-100 p-4 rounded-2xl text-center text-[10px] font-black uppercase text-gray-400">Escala Fechada</div>
-                                        ) : (
-                                            <div className="flex flex-col gap-2">
-                                                <select onChange={(e) => handleRespond(ev, 'present', e.target.value)} className="w-full p-3 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase outline-none cursor-pointer">
-                                                    <option value="">Informar Disponibilidade</option>
-                                                    {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                                </select>
-                                                <button onClick={() => handleRespond(ev, 'absent')} className="w-full p-3 border-2 border-red-100 text-red-500 rounded-xl font-black text-[10px] uppercase hover:bg-red-50 transition-colors">Não Posso Ir</button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            );
-        }
-
-        function EventsAdminView({ events, attendance, departments }) {
-            const [showAdd, setShowAdd] = useState(false);
-            const handleCreate = async (e) => {
-                e.preventDefault();
-                const data = new FormData(e.target);
-                const path = `artifacts/${appId}/public/data/events`;
-                await db.collection(path).add({
-                    name: data.get('name'), date: data.get('date'), time: data.get('time'), category: data.get('category'),
-                    period: data.get('period'), location: data.get('location'), scaleStatus: 'draft'
-                });
-                setShowAdd(false);
-            };
-
-            return (
-                <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-black uppercase tracking-tighter text-gray-800">Cronograma</h2>
-                        <button onClick={() => setShowAdd(true)} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold shadow-md hover:bg-blue-700 transition-colors">Novo Evento</button>
-                    </div>
-                    {showAdd && (
-                        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                            <form onSubmit={handleCreate} className="bg-white p-8 rounded-[3rem] w-full max-w-md space-y-4 shadow-2xl">
-                                <h2 className="text-xl font-black uppercase text-gray-700">Novo Registro</h2>
-                                <select name="category" className="w-full p-4 bg-gray-50 rounded-xl border focus:border-blue-600 outline-none" required>
-                                    <option value="Agenda Ministerial">Agenda Ministerial</option>
-                                    <option value="Congressos">Congressos</option>
-                                </select>
-                                <input name="name" placeholder="Nome do Evento" className="w-full p-4 bg-gray-50 rounded-xl border focus:border-blue-600 outline-none" required />
-                                <input name="date" type="date" className="w-full p-4 bg-gray-50 rounded-xl border focus:border-blue-600 outline-none" required />
-                                <div className="flex gap-4">
-                                    <button type="button" onClick={() => setShowAdd(false)} className="flex-1 p-4 text-gray-400 font-black uppercase text-xs">Cancelar</button>
-                                    <button type="submit" className="flex-1 p-4 bg-blue-600 text-white font-black rounded-xl uppercase text-xs">Salvar</button>
-                                </div>
-                            </form>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        function UsersAdminView({ allUsers, departments }) {
-            const toggleStatus = async (u) => {
-                const path = `artifacts/${appId}/public/data/users/${u.uid}`;
-                await db.doc(path).update({
-                    status: u.status === 'active' ? 'blocked' : 'active'
-                });
-            };
-
-            return (
-                <div className="space-y-6">
-                    <h2 className="text-2xl font-black uppercase tracking-tighter text-gray-800">Gestão de Equipe</h2>
-                    <div className="bg-white rounded-[2.5rem] border overflow-hidden shadow-sm">
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-50 text-[10px] font-black uppercase tracking-widest border-b">
-                                <tr>
-                                    <th className="px-6 py-4 text-gray-500">Membro</th>
-                                    <th className="px-6 py-4 text-gray-500">Igreja / Unidade</th>
-                                    <th className="px-6 py-4 text-gray-500">Estado</th>
-                                    <th className="px-6 py-4 text-right text-gray-500">Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {allUsers.map(u => (
-                                    <tr key={u.uid} className="hover:bg-gray-50 transition-colors text-sm">
-                                        <td className="px-6 py-4 font-bold text-gray-700">{u.name}</td>
-                                        <td className="px-6 py-4 text-[10px] uppercase font-bold text-gray-400">
-                                            {u.unidadeType}: {u.congregacaoName || u.setorName || u.regionalName}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${u.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>{u.status}</span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button onClick={() => toggleStatus(u)} className="text-blue-600 font-bold text-[10px] uppercase hover:underline">Alternar</button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            );
-        }
-
-        function AuthScreen({ onLogin, onRegister, onAdminLogin, error, isProcessing }) {
-            const [mode, setMode] = useState('login');
-            const [selectedUnidade, setSelectedUnidade] = useState("");
-
-            return (
-                <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans text-gray-800">
-                    <div className="max-w-4xl w-full bg-white rounded-[4rem] shadow-2xl overflow-hidden flex flex-col md:flex-row border border-gray-100">
-                        <div className="md:w-1/2 bg-blue-600 p-12 text-white flex flex-col justify-center text-center relative overflow-hidden">
-                            <h1 className="text-4xl font-black mb-4 uppercase leading-none tracking-tighter">Portal Ministerial</h1>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-60">Gestão de Equipes</p>
-                        </div>
-                        <div className="md:w-1/2 p-12 overflow-y-auto max-h-[90vh] scrollbar-hide text-sm">
-                            <div className="flex gap-2 mb-8 bg-gray-100 p-1.5 rounded-3xl">
-                                <button onClick={() => setMode('login')} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-2xl transition-all ${mode === 'login' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>Acesso</button>
-                                <button onClick={() => setMode('register')} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-2xl transition-all ${mode === 'register' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>Cadastro</button>
-                                <button onClick={() => setMode('admin')} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-2xl transition-all ${mode === 'admin' ? 'bg-white shadow text-purple-600' : 'text-gray-400'}`}>Admin</button>
-                            </div>
-                            
-                            <form onSubmit={(e) => {
-                                if (mode === 'login') onLogin(e);
-                                else if (mode === 'register') onRegister(e);
-                                else onAdminLogin(e);
-                            }} className="space-y-4">
-                                {mode === 'login' && (
-                                    <React.Fragment>
-                                        <input name="name" placeholder="Nome de Utilizador" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border focus:border-blue-600 transition-all shadow-sm" />
-                                        <input name="password" type="password" placeholder="Senha" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border focus:border-blue-600 transition-all shadow-sm" />
-                                    </React.Fragment>
-                                )}
-                                {mode === 'register' && (
-                                    <div className="space-y-3 animate-in">
-                                        <input name="name" placeholder="Nome Completo" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-sm" />
-                                        <select name="unidadeType" defaultValue="" required onChange={(e) => setSelectedUnidade(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-black text-[10px] border uppercase tracking-widest cursor-pointer shadow-sm">
-                                            <option value="" disabled>Selecione sua Igreja</option>
-                                            <option value="Regional">Regional</option>
-                                            <option value="Setor">Setor</option>
-                                            <option value="Congregação">Congregação</option>
-                                        </select>
-                                        {selectedUnidade && <input name="regionalName" placeholder="Nome da Regional" required className="w-full p-4 bg-white border-2 border-blue-200 rounded-2xl outline-none font-bold text-sm animate-in" />}
-                                        {(selectedUnidade === "Setor" || selectedUnidade === "Congregação") && <input name="setorName" placeholder="Nome do Setor" required className="w-full p-4 bg-white border-2 border-blue-200 rounded-2xl outline-none font-bold text-sm animate-in" />}
-                                        {selectedUnidade === "Congregação" && <input name="congregacaoName" placeholder="Nome da Congregação" required className="w-full p-4 bg-white border-2 border-blue-200 rounded-2xl outline-none font-bold text-sm animate-in" />}
-                                        <input name="password" type="password" placeholder="Senha (min. 6 chars)" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-sm" />
-                                    </div>
-                                )}
-                                {mode === 'admin' && <input name="adminPassword" type="password" placeholder="Senha Mestre Padrão" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border border-purple-200 shadow-sm" />}
-                                {error && <div className="p-4 bg-red-50 text-red-500 rounded-2xl text-[10px] font-black uppercase text-center border border-red-100">{error}</div>}
-                                <button type="submit" disabled={isProcessing} className={`w-full ${mode === 'admin' ? 'bg-purple-600' : 'bg-blue-600'} text-white py-5 rounded-[1.5rem] font-black shadow-xl uppercase tracking-widest text-[11px] transition-all active:scale-95`}>
-                                    {isProcessing ? "A processar..." : "Confirmar"}
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+          {view === 'dashboard' && <DashboardView userProfile={userProfile} attendance={attendance} events={events} />}
+          {view === 'agenda' && <AgendaView events={events} attendance={attendance} userProfile={userProfile} departments={departments} category="Agenda Ministerial" showToast={showToast} />}
+          {view === 'congressos' && <AgendaView events={events} attendance={attendance} userProfile={userProfile} departments={departments} category="Congressos" showToast={showToast} />}
+          {view === 'my_depts' && <UserDepartments departments={departments} userProfile={userProfile} />}
+          
+          {userProfile.isAdmin && (
+            <>
+              {view === 'events_admin' && <EventsAdmin events={events} attendance={attendance} departments={departments} showToast={showToast} />}
+              {view === 'users' && <MembersAdmin allUsers={allUsers} departments={departments} showToast={showToast} />}
+              {view === 'depts_admin' && <DepartmentsAdmin departments={departments} showToast={showToast} />}
+              {view === 'reports' && <ReportsView attendance={attendance} allUsers={allUsers} departments={departments} />}
+              {view === 'settings' && <SettingsAdminView settings={settings} onUpdate={s => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), s)} showToast={showToast} />}
+            </>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}

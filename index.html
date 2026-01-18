@@ -388,7 +388,7 @@
                                         {isUserEscalated && (
                                             <div className="text-green-600 text-[10px] font-bold uppercase flex items-center justify-center md:justify-start gap-1">
                                                 <Icon name="CheckCircle" size={12}/> 
-                                                Escalado: {myAtt.role || myAtt.servingDept}
+                                                {myAtt.servingDept}
                                             </div>
                                         )}
                                         {ev.deadline && (
@@ -404,7 +404,9 @@
                                         {(myAtt && expandedEvent !== ev.id) ? (
                                             <div className="flex flex-col items-center md:items-end gap-1">
                                                 <span className={`px-4 py-1.5 rounded-lg font-black uppercase text-[9px] ${myAtt.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                    {myAtt.status === 'present' ? myAtt.servingDept : 'Indisponível'}
+                                                    {myAtt.status === 'present' 
+                                                        ? (isUserEscalated ? `Escalado: ${myAtt.role || myAtt.servingDept}` : myAtt.servingDept) 
+                                                        : 'Indisponível'}
                                                 </span>
                                                 {!isReady && !isExpired && (
                                                     <button onClick={() => setExpandedEvent(ev.id)} className="text-[9px] font-bold text-gray-400 hover:text-primary underline">Alterar</button>
@@ -676,10 +678,13 @@
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingId), data);
                         showToast("Evento atualizado!");
                         setEditingId(null);
+                        // Don't clear name/location on edit to allow workflow, or maybe clear? 
+                        // User asked to PRE-SAVE fields on ADD.
                         setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '' }); 
                     } else {
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data);
                         showToast("Evento criado!");
+                        // Keep Name and Location for next entry
                         setForm(prev => ({ ...prev, date: '', time: '', deadline: '' })); 
                     }
                 } catch (err) { console.error(err); }

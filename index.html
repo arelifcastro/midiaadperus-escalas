@@ -28,6 +28,9 @@
         .animate-in { animation: fadeIn 0.3s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+        /* Safe Area for Mobile */
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 80px); }
+
         /* Print Styles */
         @media print {
             .no-print { display: none !important; }
@@ -114,7 +117,7 @@
                 return () => clearTimeout(timer);
             }, [onClose]);
             return (
-                <div className="fixed bottom-4 right-4 bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-3 animate-in toast-container">
+                <div className="fixed bottom-20 left-1/2 -translate-x-1/2 md:bottom-4 md:left-auto md:right-4 md:translate-x-0 bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl z-[60] flex items-center gap-3 animate-in toast-container min-w-[300px] justify-center md:justify-start">
                     <Icon name="CheckCircle" size={18} className="text-green-400" />
                     <span className="text-xs font-bold uppercase tracking-wide">{message}</span>
                 </div>
@@ -135,19 +138,19 @@
         // --- Shared Components ---
         function FilterHeader({ month, setMonth, year, setYear, day, setDay, title, showDay = false }) {
             return (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print mb-6">
-                    <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">{title}</h1>
-                    <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm">
+                <div className="flex flex-col gap-4 no-print mb-6">
+                    <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">{title}</h1>
+                    <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm self-start">
                         {showDay && (
-                            <select value={day || ""} onChange={e => setDay(e.target.value ? Number(e.target.value) : null)} className="bg-transparent text-[10px] font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
-                                <option value="">Todos os Dias</option>
-                                {[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>Dia {i+1}</option>)}
+                            <select value={day || ""} onChange={e => setDay(e.target.value ? Number(e.target.value) : null)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                <option value="">Todos</option>
+                                {[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}
                             </select>
                         )}
-                        <select value={month} onChange={e => setMonth(Number(e.target.value))} className="bg-transparent text-[10px] font-black uppercase outline-none px-2 cursor-pointer text-gray-800">
+                        <select value={month} onChange={e => setMonth(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800">
                             {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
                         </select>
-                        <select value={year} onChange={e => setYear(Number(e.target.value))} className="bg-transparent text-[10px] font-black uppercase outline-none px-2 cursor-pointer text-gray-800">
+                        <select value={year} onChange={e => setYear(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800">
                             {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                         </select>
                     </div>
@@ -157,13 +160,13 @@
 
         function StatCard({ title, value, iconName, iconColor }) {
             return (
-                <div className="bg-white p-6 rounded-[2rem] border shadow-sm flex items-center gap-4 hover:translate-y-[-2px] transition-transform group card-print">
-                    <div className={`p-4 bg-gray-50 rounded-2xl transition-colors group-hover:bg-primary/5 ${iconColor || 'text-primary'}`}>
-                        <Icon name={iconName} size={24} />
+                <div className="bg-white p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border shadow-sm flex items-center gap-4 hover:translate-y-[-2px] transition-transform group card-print">
+                    <div className={`p-3 md:p-4 bg-gray-50 rounded-2xl transition-colors group-hover:bg-primary/5 ${iconColor || 'text-primary'}`}>
+                        <Icon name={iconName} size={20} className="md:w-6 md:h-6" />
                     </div>
                     <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{title}</p>
-                        <p className="text-2xl font-black tracking-tighter leading-none text-gray-800">{value}</p>
+                        <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{title}</p>
+                        <p className="text-xl md:text-2xl font-black tracking-tighter leading-none text-gray-800">{value}</p>
                     </div>
                 </div>
             );
@@ -192,19 +195,19 @@
             return (
                 <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
                     <CustomStyles primaryColor={settings.primaryColor} />
-                    <div className="max-w-4xl w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row border border-gray-100">
-                        <div className="md:w-1/2 p-12 flex flex-col justify-center relative overflow-hidden text-center transition-all duration-700" style={bannerBg}>
+                    <div className="max-w-4xl w-full bg-white rounded-[2rem] md:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row border border-gray-100">
+                        <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center relative overflow-hidden text-center transition-all duration-700" style={bannerBg}>
                             <div className="relative z-10">
-                                <div className="w-24 h-24 mx-auto mb-6 bg-white/10 rounded-full flex items-center justify-center overflow-hidden border-2 border-white/20">
+                                <div className="w-20 h-20 md:w-24 md:h-24 mx-auto mb-6 bg-white/10 rounded-full flex items-center justify-center overflow-hidden border-2 border-white/20">
                                     {settings.logoUrl ? <img src={settings.logoUrl} className="w-full h-full object-cover" /> : <Icon name="Crown" size={48} className="opacity-80 text-white" />}
                                 </div>
-                                <h1 className="text-4xl font-black mb-2 uppercase leading-none tracking-tighter text-white drop-shadow-lg">
+                                <h1 className="text-3xl md:text-4xl font-black mb-2 uppercase leading-none tracking-tighter text-white drop-shadow-lg">
                                     {settings.loginTitle || "Mídia ADPerus"}
                                 </h1>
-                                <p className="text-white/80 font-bold text-xs uppercase tracking-widest mt-4">Acesso Voluntários</p>
+                                <p className="text-white/80 font-bold text-[10px] md:text-xs uppercase tracking-widest mt-4">Acesso Voluntários</p>
                             </div>
                         </div>
-                        <div className="md:w-1/2 p-12 flex flex-col justify-center">
+                        <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
                             
                             <form onSubmit={onLogin} className="space-y-4">
                                 <div className="space-y-4 animate-in">
@@ -256,22 +259,22 @@
             return (
                 <div className="space-y-6">
                     <FilterHeader title={`Olá, ${userProfile.name?.split(' ')[0]}`} month={month} setMonth={setMonth} year={year} setYear={setYear} />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                         <StatCard title="Disponível" value={stats.available} iconName="CheckCircle" iconColor="text-green-500" />
                         <StatCard title="Indisponível" value={stats.unavailable} iconName="XCircle" iconColor="text-red-500" />
                         <StatCard title="Escalado" value={stats.escalated} iconName="ClipboardCheck" iconColor="text-purple-500" />
                         <StatCard title="Eventos Futuros" value={stats.pending} iconName="Clock" iconColor="text-blue-500" />
                     </div>
-                    <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm">
-                        <h2 className="text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-gray-800"><Icon name="FileText" className="text-primary" /> Histórico Ministerial</h2>
+                    <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border shadow-sm">
+                        <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-gray-800"><Icon name="FileText" className="text-primary" /> Histórico Ministerial</h2>
                         <div className="divide-y divide-gray-50">
                             {filteredAtt.map(a => (
                                 <div key={a.id} className="py-4 flex justify-between items-center">
                                     <div>
-                                        <p className="font-bold uppercase text-xs text-gray-800">{a.eventName}</p>
-                                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-tight">{a.servingDept} • {new Date(a.timestamp).toLocaleDateString()}</p>
+                                        <p className="font-bold uppercase text-[10px] md:text-xs text-gray-800">{a.eventName}</p>
+                                        <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tight">{a.servingDept} • {new Date(a.timestamp).toLocaleDateString()}</p>
                                     </div>
-                                    <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                    <span className={`px-2 py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase ${a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                                         {a.status === 'present' ? "Disponível" : "Ausente"}
                                     </span>
                                 </div>
@@ -330,9 +333,9 @@
                     <FilterHeader title={title} month={filterMonth} setMonth={setFilterMonth} year={filterYear} setYear={setFilterYear} />
                     
                     <div className="flex flex-col md:flex-row justify-between gap-4 no-print">
-                        <div className="flex bg-white p-1 rounded-2xl border shadow-sm">
+                        <div className="flex bg-white p-1 rounded-2xl border shadow-sm overflow-x-auto">
                             {[{ id: 'all', label: 'Todos' }, { id: 'week', label: 'Semana' }, { id: 'saturday', label: 'Sábado' }, { id: 'sunday', label: 'Domingo' }].map(f => (
-                                <button key={f.id} onClick={() => setDayFilter(f.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${dayFilter === f.id ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-primary'}`}>{f.label}</button>
+                                <button key={f.id} onClick={() => setDayFilter(f.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${dayFilter === f.id ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-primary'}`}>{f.label}</button>
                             ))}
                         </div>
                         <button onClick={() => setShowEscalatedOnly(!showEscalatedOnly)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl border-2 font-black uppercase text-[10px] transition-all ${showEscalatedOnly ? 'bg-green-600 border-green-600 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-400 hover:border-green-400 hover:text-green-600'}`}>
@@ -353,12 +356,15 @@
                             const isExpired = deadlineDate && now > deadlineDate;
 
                             return (
-                                <div key={ev.id} className={`bg-white rounded-[2rem] border p-5 shadow-sm transition-all flex flex-col md:flex-row items-center gap-6 card-print ${isUserEscalated ? 'ring-2 ring-green-500 bg-green-50/10' : 'hover:border-primary/40'}`}>
+                                <div key={ev.id} className={`bg-white rounded-[2rem] border p-5 shadow-sm transition-all flex flex-col md:flex-row items-center gap-4 md:gap-6 card-print ${isUserEscalated ? 'ring-2 ring-green-500 bg-green-50/10' : 'hover:border-primary/40'}`}>
                                     {/* Date */}
-                                    <div className="flex flex-col items-center justify-center text-center shrink-0 w-16">
-                                        <span className="text-[10px] font-black uppercase text-gray-400">{MONTHS[new Date(ev.date).getUTCMonth()].substring(0,3)}</span>
-                                        <span className={`text-3xl font-black leading-none ${isUserEscalated ? 'text-green-600' : 'text-gray-800'}`}>{new Date(ev.date).getUTCDate()}</span>
-                                        <span className="text-[10px] font-black uppercase mt-1 text-blue-600">
+                                    <div className="flex flex-row md:flex-col items-center justify-between md:justify-center p-2 md:p-0 w-full md:w-16 text-center shrink-0 border-b md:border-b-0 md:border-none pb-2 md:pb-0">
+                                        <div className="md:hidden text-[10px] font-bold text-gray-400 uppercase">{new Date(ev.date).toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' }).replace('.','')}</div>
+                                        <div className="flex items-center gap-2 md:flex-col md:gap-0 md:items-center">
+                                             <span className="text-[10px] font-black uppercase text-gray-400 md:mb-1">{MONTHS[new Date(ev.date).getUTCMonth()].substring(0,3)}</span>
+                                             <span className={`text-2xl md:text-3xl font-black leading-none ${isUserEscalated ? 'text-green-600' : 'text-gray-800'}`}>{new Date(ev.date).getUTCDate()}</span>
+                                        </div>
+                                        <span className="hidden md:block text-[10px] font-black uppercase mt-1 text-blue-600">
                                             {new Date(ev.date).toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' }).replace('.','')}
                                         </span>
                                     </div>
@@ -367,9 +373,9 @@
                                     <div className="hidden md:block w-px h-12 bg-gray-100"></div>
 
                                     {/* Info */}
-                                    <div className="flex-1 text-center md:text-left space-y-2">
-                                        <h3 className="text-lg font-black uppercase text-gray-800">{ev.name}</h3>
-                                        <div className="flex flex-wrap gap-3 justify-center md:justify-start text-[11px] font-bold text-gray-400 uppercase">
+                                    <div className="flex-1 text-center md:text-left space-y-2 w-full">
+                                        <h3 className="text-lg font-black uppercase text-gray-800 leading-tight">{ev.name}</h3>
+                                        <div className="flex flex-wrap gap-2 justify-center md:justify-start text-[10px] font-bold text-gray-400 uppercase">
                                             <span className="flex items-center gap-1.5 bg-blue-100 text-blue-700 px-2 py-1 rounded"><Icon name="Clock" size={12}/> {ev.time}</span>
                                             
                                             {/* Custom Period Badge */}
@@ -378,10 +384,15 @@
                                             </span>
                                             
                                             <span className="flex items-center gap-1.5"><Icon name="MapPin" size={12}/> {ev.location || "Sede"}</span>
-                                            {isUserEscalated && <span className="text-green-600 flex items-center gap-1"><Icon name="CheckCircle" size={12}/> Escalado ({myAtt.servingDept})</span>}
                                         </div>
+                                        {isUserEscalated && (
+                                            <div className="text-green-600 text-[10px] font-bold uppercase flex items-center justify-center md:justify-start gap-1">
+                                                <Icon name="CheckCircle" size={12}/> 
+                                                Escalado: {myAtt.role || myAtt.servingDept}
+                                            </div>
+                                        )}
                                         {ev.deadline && (
-                                            <div className="text-[10px] text-red-400 font-bold uppercase">
+                                            <div className="text-[9px] text-red-400 font-bold uppercase">
                                                 Prazo: {new Date(ev.deadline).toLocaleString()} 
                                                 {isExpired && !myAtt && <span className="ml-1 bg-red-100 text-red-600 px-1 rounded">Expirado</span>}
                                             </div>
@@ -411,7 +422,7 @@
                                             <button 
                                                 onClick={() => setExpandedEvent(ev.id)} 
                                                 disabled={isExpired}
-                                                className={`w-full md:w-auto px-6 py-3 rounded-xl font-black text-[10px] uppercase shadow-lg transition-all ${isExpired ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' : 'bg-primary text-white shadow-blue-200 hover:bg-primary/90 hover:scale-105'}`}
+                                                className={`w-full md:w-auto px-6 py-4 rounded-xl font-black text-[10px] uppercase shadow-lg transition-all ${isExpired ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' : 'bg-primary text-white shadow-blue-200 hover:bg-primary/90 active:scale-95'}`}
                                             >
                                                 {isExpired ? 'Fechado' : 'Dar disponibilidade'}
                                             </button>
@@ -431,7 +442,7 @@
             
             return (
                 <div className="space-y-6">
-                    <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800 mb-6">{title}</h1>
+                    <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">{title}</h1>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {myDepts.map(d => (
                             <div key={d.id} className="bg-white p-8 rounded-[2.5rem] border-l-8 shadow-sm relative overflow-hidden group" style={{ borderLeftColor: d.color }}>
@@ -700,7 +711,7 @@
                     <datalist id="eventNames">{uniqueNames.map(n => <option key={n} value={n} />)}</datalist>
                     <datalist id="eventLocations">{uniqueLocations.map(l => <option key={l} value={l} />)}</datalist>
 
-                    <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Criar Eventos</h1>
+                    <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Criar Eventos</h1>
                     <form onSubmit={handleSave} className="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4">
                         <div className="flex justify-between items-center mb-2">
                             <h3 className="font-black uppercase text-xs text-gray-400">{editingId ? 'Editando Evento' : 'Novo Evento'}</h3>
@@ -811,6 +822,7 @@
             const [statsTab, setStatsTab] = useState('present'); // 'present', 'absent', 'pending'
             const [scaleModalEvent, setScaleModalEvent] = useState(null);
             const [scaleModalDept, setScaleModalDept] = useState(null);
+            const [expandedVolunteer, setExpandedVolunteer] = useState(null);
 
             // Filter Logic
             const filteredEvents = useMemo(() => events.filter(ev => {
@@ -827,8 +839,11 @@
                 showToast(`Escala ${newStatus === 'ready' ? 'publicada' : 'ocultada'}!`); 
             };
             
-            const toggleEscalation = async (att) => { 
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', att.id), { isEscalated: !att.isEscalated }); 
+            const toggleEscalation = async (att, role = null) => { 
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', att.id), { 
+                    isEscalated: !att.isEscalated,
+                    role: !att.isEscalated ? role : null 
+                }); 
             };
 
             // Helpers for Stats
@@ -1001,22 +1016,60 @@
                                         <div className="space-y-2">
                                             {attendance
                                                 .filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept)
-                                                .map(att => (
-                                                    <div key={att.id} className="flex items-center justify-between p-3 bg-white rounded-xl shadow-sm border border-gray-100">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-black text-xs">
-                                                                {att.userName.charAt(0)}
+                                                .map(att => {
+                                                    const deptObj = departments.find(d => d.name === att.servingDept);
+                                                    const hasFunctions = deptObj?.functions && deptObj.functions.length > 0;
+
+                                                    return (
+                                                        <div key={att.id} className="flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                                            <div className="flex items-center justify-between p-3">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-black text-xs">
+                                                                        {att.userName.charAt(0)}
+                                                                    </div>
+                                                                    <span className="font-bold text-xs uppercase text-gray-700">{att.userName}</span>
+                                                                </div>
+                                                                
+                                                                {att.isEscalated ? (
+                                                                    <button 
+                                                                        onClick={() => toggleEscalation(att)} 
+                                                                        className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-green-500 text-white shadow-md shadow-green-200"
+                                                                    >
+                                                                        Escalado {att.role ? `(${att.role})` : ''}
+                                                                    </button>
+                                                                ) : (
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            if (hasFunctions) {
+                                                                                setExpandedVolunteer(expandedVolunteer === att.id ? null : att.id);
+                                                                            } else {
+                                                                                toggleEscalation(att, 'Voluntário');
+                                                                            }
+                                                                        }} 
+                                                                        className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-gray-100 text-gray-400 hover:bg-gray-200"
+                                                                    >
+                                                                        Escalar
+                                                                    </button>
+                                                                )}
                                                             </div>
-                                                            <span className="font-bold text-xs uppercase text-gray-700">{att.userName}</span>
+
+                                                            {/* Role Selection Drawer */}
+                                                            {!att.isEscalated && expandedVolunteer === att.id && hasFunctions && (
+                                                                <div className="bg-gray-50 p-2 grid grid-cols-2 gap-2 animate-in border-t border-gray-100">
+                                                                    {deptObj.functions.map(role => (
+                                                                        <button 
+                                                                            key={role} 
+                                                                            onClick={() => { toggleEscalation(att, role); setExpandedVolunteer(null); }} 
+                                                                            className="p-2 bg-white border rounded text-[10px] font-bold hover:border-purple-500 hover:text-purple-600 transition"
+                                                                        >
+                                                                            {role}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <button 
-                                                            onClick={() => toggleEscalation(att)} 
-                                                            className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${att.isEscalated ? 'bg-green-500 text-white shadow-md shadow-green-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-                                                        >
-                                                            {att.isEscalated ? 'Escalado' : 'Escalar'}
-                                                        </button>
-                                                    </div>
-                                                ))
+                                                    );
+                                                })
                                             }
                                             {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).length === 0 && (
                                                 <p className="text-center py-10 text-gray-400 text-xs font-bold uppercase">Nenhum voluntário disponível nesta função.</p>
@@ -1034,7 +1087,8 @@
         function AdminDepartmentsView({ departments, showToast }) {
             const [editingDept, setEditingDept] = useState(null);
             const [isModalOpen, setIsModalOpen] = useState(false);
-            const [form, setForm] = useState({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '' });
+            const [form, setForm] = useState({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '', functions: [] });
+            const [newFunction, setNewFunction] = useState('');
 
             const handleSave = async (e) => {
                 e.preventDefault();
@@ -1046,7 +1100,7 @@
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), form);
                         showToast("Departamento criado!");
                     }
-                    setIsModalOpen(false); setEditingDept(null); setForm({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '' });
+                    setIsModalOpen(false); setEditingDept(null); setForm({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '', functions: [] });
                 } catch (err) { console.error(err); }
             };
 
@@ -1065,15 +1119,22 @@
                 }
             };
 
+            const addFunction = () => {
+                if(newFunction.trim()) {
+                    setForm(prev => ({ ...prev, functions: [...(prev.functions || []), newFunction.trim()] }));
+                    setNewFunction('');
+                }
+            };
+
             const openEdit = (d) => {
                 setEditingDept(d);
-                setForm(d);
+                setForm({ ...d, functions: d.functions || [] });
                 setIsModalOpen(true);
             };
 
             const openNew = () => {
                 setEditingDept(null);
-                setForm({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '' });
+                setForm({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '', functions: [] });
                 setIsModalOpen(true);
             };
 
@@ -1134,6 +1195,29 @@
                                             <input type="text" value={form.color} onChange={e => setForm({...form, color: e.target.value})} className="flex-1 p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800 uppercase" />
                                         </div>
                                     </div>
+                                    
+                                    {/* Functions Management */}
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">Funções / Cargos</label>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                value={newFunction} 
+                                                onChange={e => setNewFunction(e.target.value)} 
+                                                placeholder="Ex: Filmmaker" 
+                                                className="flex-1 p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800"
+                                            />
+                                            <button type="button" onClick={addFunction} className="p-3 bg-purple-100 text-purple-600 rounded-xl hover:bg-purple-200"><Icon name="Plus" size={16}/></button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            {(form.functions || []).map((f, i) => (
+                                                <span key={i} className="px-3 py-1 bg-gray-100 rounded-lg text-xs font-bold text-gray-600 flex items-center gap-2">
+                                                    {f} <button type="button" onClick={() => setForm(prev => ({...prev, functions: prev.functions.filter((_, idx) => idx !== i)}))} className="text-red-400 hover:text-red-600"><Icon name="X" size={12}/></button>
+                                                </span>
+                                            ))}
+                                            {(form.functions || []).length === 0 && <span className="text-xs text-gray-400 italic">Nenhuma função adicionada.</span>}
+                                        </div>
+                                    </div>
+
                                     <div>
                                         <label className="text-[10px] font-black uppercase text-gray-400">Descrição</label>
                                         <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800 h-24"></textarea>
@@ -1413,6 +1497,9 @@
             const [loginError, setLoginError] = useState(null);
             const [authLoading, setAuthLoading] = useState(false);
             
+            // Mobile Menu State
+            const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
             // Settings State
             const [appSettings, setAppSettings] = useState({
                 primaryColor: '#3b82f6',
@@ -1610,20 +1697,68 @@
                         </div>
                     </aside>
 
+                    {/* Mobile Header (Admin Only) */}
+                    {isAdmin && (
+                         <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-50">
+                             <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white overflow-hidden">
+                                    {appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={16} />}
+                                </div>
+                                <h1 className="font-black uppercase text-xs text-gray-800">{appSettings.loginTitle}</h1>
+                             </div>
+                             <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-gray-50 rounded-xl text-gray-500"><Icon name="Menu" size={24} /></button>
+                         </div>
+                    )}
+
+                    {/* Mobile Admin Drawer */}
+                    {isAdmin && isMobileMenuOpen && (
+                        <div className="fixed inset-0 z-[60] flex md:hidden">
+                            <div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div>
+                            <div className="relative w-64 bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in">
+                                <div className="flex justify-between items-center mb-8">
+                                     <h2 className="font-black uppercase text-lg text-gray-800">Menu Admin</h2>
+                                     <button onClick={() => setIsMobileMenuOpen(false)}><Icon name="X" size={24} /></button>
+                                </div>
+                                <div className="space-y-2">
+                                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
+                                    <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => { setView('create_events'); setIsMobileMenuOpen(false); }} open={true} />
+                                    <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => { setView('manage_scales'); setIsMobileMenuOpen(false); }} open={true} />
+                                    <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => { setView('manage_team'); setIsMobileMenuOpen(false); }} open={true} />
+                                    <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => { setView('manage_depts'); setIsMobileMenuOpen(false); }} open={true} />
+                                    <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => { setView('reports'); setIsMobileMenuOpen(false); }} open={true} />
+                                    <div className="my-4 border-t border-gray-100"></div>
+                                    <NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => { setView('admin_master'); setIsMobileMenuOpen(false); }} open={true} />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Mobile Bottom Nav */}
-                    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-3 flex justify-around z-50 no-print pb-safe">
-                         <button onClick={() => setView('dashboard')} className={`p-2 rounded-xl ${view === 'dashboard' ? 'text-primary bg-blue-50' : 'text-gray-400'}`}><Icon name="LayoutDashboard" size={24} /></button>
-                         <button onClick={() => setView('agenda')} className={`p-2 rounded-xl ${view === 'agenda' ? 'text-primary bg-blue-50' : 'text-gray-400'}`}><Icon name="Calendar" size={24} /></button>
-                         {isAdmin ? (
-                             <button onClick={() => setView('create_events')} className={`p-2 rounded-xl ${view === 'create_events' ? 'text-purple-600 bg-purple-50' : 'text-gray-400'}`}><Icon name="PlusCircle" size={24} /></button>
-                         ) : (
-                             <button onClick={() => setView('depts')} className={`p-2 rounded-xl ${view === 'depts' ? 'text-primary bg-blue-50' : 'text-gray-400'}`}><Icon name="Briefcase" size={24} /></button>
-                         )}
-                         <button onClick={handleLogout} className="p-2 rounded-xl text-red-400"><Icon name="LogOut" size={24} /></button>
+                    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-2 pb-safe flex justify-around items-center z-50 no-print shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                         <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}>
+                            <Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} />
+                            <span className="text-[9px] font-bold">Painel</span>
+                         </button>
+                         <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}>
+                            <Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} />
+                            <span className="text-[9px] font-bold">Agenda</span>
+                         </button>
+                         <button onClick={() => setView('congressos')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'congressos' ? 'text-primary' : 'text-gray-400'}`}>
+                            <Icon name="Trophy" size={20} strokeWidth={view === 'congressos' ? 2.5 : 2} />
+                            <span className="text-[9px] font-bold">Congressos</span>
+                         </button>
+                         <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}>
+                            <Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} />
+                            <span className="text-[9px] font-bold">Equipe</span>
+                         </button>
+                         <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400">
+                            <Icon name="LogOut" size={20} />
+                            <span className="text-[9px] font-bold">Sair</span>
+                         </button>
                     </div>
 
                     {/* Content Area */}
-                    <main className="flex-1 md:ml-72 p-6 md:p-12 mb-20 md:mb-0 max-w-7xl mx-auto w-full">
+                    <main className={`flex-1 md:ml-72 p-4 md:p-12 mb-24 md:mb-0 max-w-7xl mx-auto w-full ${isAdmin ? 'mt-16 md:mt-0' : ''}`}>
                         {/* User Views */}
                         {view === 'dashboard' && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}
                         {view === 'agenda' && <AgendaView title={appSettings.tabNames.agenda} category="Agenda Ministerial" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}

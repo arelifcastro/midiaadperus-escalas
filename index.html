@@ -245,15 +245,22 @@
             const [year, setYear] = useState(new Date().getFullYear());
 
             const filteredAtt = useMemo(() => attendance.filter(a => {
-                const d = new Date(a.timestamp);
-                return a.userId === userProfile.uid && d.getMonth() === Number(month) && d.getFullYear() === Number(year);
+                if (!a.eventDate) return false;
+                const d = new Date(a.eventDate);
+                // Use UTC to match eventDate storage (YYYY-MM-DD)
+                return a.userId === userProfile.uid && 
+                       d.getUTCMonth() === Number(month) && 
+                       d.getUTCFullYear() === Number(year);
             }), [attendance, userProfile.uid, month, year]);
 
             const stats = {
                 available: filteredAtt.filter(a => a.status === 'present').length,
                 unavailable: filteredAtt.filter(a => a.status === 'absent').length,
                 escalated: filteredAtt.filter(a => a.isEscalated).length,
-                pending: events.filter(e => new Date(e.date) > new Date()).length
+                pending: events.filter(e => {
+                    const d = new Date(e.date);
+                    return d.getUTCMonth() === Number(month) && d.getUTCFullYear() === Number(year) && new Date() <= new Date(e.date);
+                }).length // Rough estimate for pending
             };
 
             return (
@@ -266,13 +273,13 @@
                         <StatCard title="Eventos Futuros" value={stats.pending} iconName="Clock" iconColor="text-blue-500" />
                     </div>
                     <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border shadow-sm">
-                        <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-gray-800"><Icon name="FileText" className="text-primary" /> Histórico Ministerial</h2>
+                        <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-gray-800"><Icon name="FileText" className="text-primary" /> Histórico</h2>
                         <div className="divide-y divide-gray-50">
                             {filteredAtt.map(a => (
                                 <div key={a.id} className="py-4 flex justify-between items-center">
                                     <div>
                                         <p className="font-bold uppercase text-[10px] md:text-xs text-gray-800">{a.eventName}</p>
-                                        <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tight">{a.servingDept} • {new Date(a.timestamp).toLocaleDateString()}</p>
+                                        <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tight">{a.servingDept} • {new Date(a.eventDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
                                     </div>
                                     <span className={`px-2 py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase ${a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                                         {a.status === 'present' ? "Disponível" : "Ausente"}
@@ -296,23 +303,20 @@
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date);
                 
-                // Common filter check: Always apply Date and Category, unless specifically overriding
-                const isDateMatch = d.getUTCMonth() === Number(filterMonth) && d.getUTCFullYear() === Number(filterYear);
+                if (showEscalatedOnly) {
+                    const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
+                    // NEW: Filter by selected Month/Year even when showing "My Scales"
+                    const isDateMatch = d.getUTCMonth() === Number(filterMonth) && d.getUTCFullYear() === Number(filterYear);
+                    return isDateMatch && ev.scaleStatus === 'ready' && myAtt?.isEscalated;
+                }
+
+                if (d.getUTCMonth() !== Number(filterMonth) || d.getUTCFullYear() !== Number(filterYear)) return false;
                 
                 const isCorrectCategory = category === "Agenda Ministerial" 
                     ? (!ev.category || ev.category === "Agenda Ministerial") 
                     : ev.category === category;
-
+                
                 if (!isCorrectCategory) return false;
-
-                if (showEscalatedOnly) {
-                    const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
-                    // Apply date filter even in "Minhas Escalas" mode
-                    if (!isDateMatch) return false;
-                    return ev.scaleStatus === 'ready' && myAtt?.isEscalated;
-                }
-
-                if (!isDateMatch) return false;
                 
                 const dayOfWeek = d.getUTCDay(); 
                 if (dayFilter === 'week' && (dayOfWeek === 0 || dayOfWeek === 6)) return false;
@@ -683,9 +687,6 @@
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingId), data);
                         showToast("Evento atualizado!");
                         setEditingId(null);
-                        // Reset but keep Name/Location for workflow as requested? Or reset all?
-                        // User asked: "vá salvando em formato lista os nomes que vou inserindo... e Local" (Done via datalist)
-                        // User also asked: "vá pré-salvando os campos" on add.
                         setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '' }); 
                     } else {
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data);

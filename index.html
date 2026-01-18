@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mídia ADPerus</title>
+    <title>Portal Ministerial - Mídia ADPerus</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React & Babel -->
@@ -296,18 +296,23 @@
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date);
                 
-                if (showEscalatedOnly) {
-                    const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
-                    return ev.scaleStatus === 'ready' && myAtt?.isEscalated;
-                }
-
-                if (d.getUTCMonth() !== Number(filterMonth) || d.getUTCFullYear() !== Number(filterYear)) return false;
+                // Common filter check: Always apply Date and Category, unless specifically overriding
+                const isDateMatch = d.getUTCMonth() === Number(filterMonth) && d.getUTCFullYear() === Number(filterYear);
                 
                 const isCorrectCategory = category === "Agenda Ministerial" 
                     ? (!ev.category || ev.category === "Agenda Ministerial") 
                     : ev.category === category;
-                
+
                 if (!isCorrectCategory) return false;
+
+                if (showEscalatedOnly) {
+                    const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
+                    // Apply date filter even in "Minhas Escalas" mode
+                    if (!isDateMatch) return false;
+                    return ev.scaleStatus === 'ready' && myAtt?.isEscalated;
+                }
+
+                if (!isDateMatch) return false;
                 
                 const dayOfWeek = d.getUTCDay(); 
                 if (dayFilter === 'week' && (dayOfWeek === 0 || dayOfWeek === 6)) return false;
@@ -388,7 +393,7 @@
                                         {isUserEscalated && (
                                             <div className="text-green-600 text-[10px] font-bold uppercase flex items-center justify-center md:justify-start gap-1">
                                                 <Icon name="CheckCircle" size={12}/> 
-                                                {myAtt.servingDept}
+                                                Escalado: {myAtt.role || myAtt.servingDept}
                                             </div>
                                         )}
                                         {ev.deadline && (
@@ -678,8 +683,9 @@
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingId), data);
                         showToast("Evento atualizado!");
                         setEditingId(null);
-                        // Don't clear name/location on edit to allow workflow, or maybe clear? 
-                        // User asked to PRE-SAVE fields on ADD.
+                        // Reset but keep Name/Location for workflow as requested? Or reset all?
+                        // User asked: "vá salvando em formato lista os nomes que vou inserindo... e Local" (Done via datalist)
+                        // User also asked: "vá pré-salvando os campos" on add.
                         setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '' }); 
                     } else {
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data);

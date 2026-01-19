@@ -57,7 +57,7 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, doc, setDoc, updateDoc, collection, onSnapshot, 
-            addDoc, deleteDoc, getDoc, writeBatch 
+            addDoc, deleteDoc, getDoc, writeBatch, getDocs 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Configuration ---
@@ -675,7 +675,7 @@
             );
         }
 
-        function ReportsView({ title, attendance, allUsers, departments }) {
+        function ReportsView({ title, attendance, allUsers, departments, events, showToast }) {
             const [month, setMonth] = useState(new Date().getMonth());
             const [year, setYear] = useState(new Date().getFullYear());
             const [search, setSearch] = useState("");
@@ -683,6 +683,9 @@
             const [endDate, setEndDate] = useState("");
             const [selectedVolunteer, setSelectedVolunteer] = useState(null);
             const [selectedDeptReport, setSelectedDeptReport] = useState(null);
+            const [showExportMenu, setShowExportMenu] = useState(false);
+            const [showClearConfirm, setShowClearConfirm] = useState(false);
+            const [isClearing, setIsClearing] = useState(false);
 
             const filteredAtt = useMemo(() => attendance.filter(a => {
                 const d = new Date(a.timestamp);
@@ -751,9 +754,97 @@
                 };
             };
 
+            const exportData = (type) => {
+                let dataToExport = [];
+                let filename = "";
+
+                if (type === 'monthly') {
+                    dataToExport = attendance.filter(a => {
+                        const d = new Date(a.eventDate);
+                        return d.getUTCMonth() === month && d.getUTCFullYear() === year;
+                    });
+                    filename = `Relatorio_Mensal_${MONTHS[month]}_${year}.csv`;
+                } else {
+                    dataToExport = attendance.filter(a => {
+                        const d = new Date(a.eventDate);
+                        return d.getUTCFullYear() === year;
+                    });
+                    filename = `Relatorio_Anual_${year}.csv`;
+                }
+
+                if (dataToExport.length === 0) {
+                    showToast("Sem dados para exportar.");
+                    return;
+                }
+
+                let csvContent = "data:text/csv;charset=utf-8,";
+                csvContent += "Evento,Data,Departamento,Voluntario,Status,Escalado,Check-in\n";
+
+                dataToExport.forEach(row => {
+                    const dateStr = new Date(row.eventDate).toLocaleDateString('pt-BR');
+                    const status = row.status === 'present' ? 'Presente' : 'Ausente';
+                    const escalated = row.isEscalated ? 'Sim' : 'Não';
+                    const checkin = row.hasCheckedIn ? 'Sim' : 'Não';
+                    csvContent += `${row.eventName},${dateStr},${row.servingDept},${row.userName},${status},${escalated},${checkin}\n`;
+                });
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", filename);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setShowExportMenu(false);
+            };
+
+            const clearAllData = async () => {
+                setIsClearing(true);
+                try {
+                    const batch = writeBatch(db);
+                    
+                    const eventsSnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'events'));
+                    eventsSnapshot.forEach((doc) => {
+                        batch.delete(doc.ref);
+                    });
+
+                    const attSnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'));
+                    attSnapshot.forEach((doc) => {
+                        batch.delete(doc.ref);
+                    });
+
+                    await batch.commit();
+                    showToast("Dados limpos com sucesso!");
+                } catch (error) {
+                    console.error("Error clearing data:", error);
+                    showToast("Erro ao limpar dados.");
+                } finally {
+                    setIsClearing(false);
+                    setShowClearConfirm(false);
+                }
+            };
+
             return (
                 <div className="space-y-8">
-                    <FilterHeader title={title} month={month} setMonth={setMonth} year={year} setYear={setYear} />
+                    <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
+                        <FilterHeader title={title} month={month} setMonth={setMonth} year={year} setYear={setYear} />
+                        <div className="flex gap-2 self-start md:self-center no-print">
+                            <div className="relative">
+                                <button onClick={() => setShowExportMenu(!showExportMenu)} className="px-4 py-3 bg-blue-100 text-blue-600 rounded-xl font-black uppercase text-[10px] hover:bg-blue-200 transition flex items-center gap-2">
+                                    <Icon name="Download" size={14} /> Exportar Relatório
+                                </button>
+                                {showExportMenu && (
+                                    <div className="absolute right-0 mt-2 bg-white shadow-xl rounded-xl border p-2 min-w-[200px] z-20 animate-in">
+                                        <button onClick={() => exportData('monthly')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 rounded-lg">Exportar Mensal ({MONTHS[month]})</button>
+                                        <button onClick={() => exportData('annual')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 rounded-lg">Exportar Anual ({year})</button>
+                                    </div>
+                                )}
+                            </div>
+                            <button onClick={() => setShowClearConfirm(true)} className="px-4 py-3 bg-red-100 text-red-600 rounded-xl font-black uppercase text-[10px] hover:bg-red-200 transition flex items-center gap-2">
+                                <Icon name="Trash2" size={14} /> Limpar Dados
+                            </button>
+                        </div>
+                    </div>
                     
                     <div className="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4">
                         <div className="flex flex-col md:flex-row gap-4 mb-4">
@@ -890,6 +981,17 @@
                                 </div>
                             </div>
                         </div>
+                    )}
+
+                    {showClearConfirm && (
+                        <ConfirmModal 
+                            title="Limpar TODOS os Dados" 
+                            message="Tem a certeza absoluta? Esta ação irá apagar TODOS os eventos criados e TODOS os registos de presença/escala. Esta ação é irreversível e reiniciará o sistema." 
+                            onConfirm={clearAllData} 
+                            onCancel={() => setShowClearConfirm(false)} 
+                            confirmText={isClearing ? "Limpando..." : "Sim, Limpar Tudo"} 
+                            isDangerous={true} 
+                        />
                     )}
                 </div>
             );
@@ -1066,7 +1168,7 @@
             );
         }
 
-        function AdminScalesView({ events, attendance, users, departments, showToast }) {
+        function AdminScalesView({ events, attendance, users, departments, showToast, userProfile }) {
             const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
             const [filterYear, setFilterYear] = useState(new Date().getFullYear());
             const [filterCategory, setFilterCategory] = useState('all');
@@ -1078,6 +1180,8 @@
             const [expandedVolunteer, setExpandedVolunteer] = useState(null);
             
             const [checkinReportEvent, setCheckinReportEvent] = useState(null);
+
+            const isLeader = userProfile?.role === 'leader';
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date + 'T12:00:00'); 
@@ -1186,22 +1290,26 @@
                                         </div>
                                         <div className="flex flex-col gap-2 w-full md:w-auto">
                                             <div className="flex gap-2">
-                                                <button onClick={() => setStatsModalEvent(ev)} className="flex-1 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100 transition flex items-center justify-center gap-2">
+                                                <button onClick={() => setStatsModalEvent(ev)} className={`flex-1 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100 transition flex items-center justify-center gap-2 ${isLeader ? 'w-full' : ''}`}>
                                                     <Icon name="BarChart2" size={14} /> 
                                                     Status ({present.length}/{present.length + absent.length + pendingUsers.length})
                                                 </button>
-                                                <button onClick={() => setCheckinReportEvent(ev)} className="flex-1 px-4 py-3 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black uppercase hover:bg-orange-100 transition flex items-center justify-center gap-2">
-                                                    <Icon name="QrCode" size={14} /> 
-                                                    Ver Check-in
-                                                </button>
+                                                {!isLeader && (
+                                                    <button onClick={() => setCheckinReportEvent(ev)} className="flex-1 px-4 py-3 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black uppercase hover:bg-orange-100 transition flex items-center justify-center gap-2">
+                                                        <Icon name="QrCode" size={14} /> 
+                                                        Ver Check-in
+                                                    </button>
+                                                )}
                                             </div>
                                             <button onClick={() => { setScaleModalEvent(ev); setScaleModalDept(departments[0]?.name); }} className="px-4 py-3 bg-purple-50 text-purple-600 rounded-xl text-[10px] font-black uppercase hover:bg-purple-100 transition flex items-center justify-center gap-2">
                                                 <Icon name="Users" size={14} /> Montar Escala
                                             </button>
-                                            <button onClick={() => toggleScale(ev)} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase transition flex items-center justify-center gap-2 ${ev.scaleStatus === 'ready' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                                                <Icon name={ev.scaleStatus === 'ready' ? 'Eye' : 'EyeOff'} size={14} />
-                                                {ev.scaleStatus === 'ready' ? 'Escala Publicada' : 'Rascunho'}
-                                            </button>
+                                            {!isLeader && (
+                                                <button onClick={() => toggleScale(ev)} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase transition flex items-center justify-center gap-2 ${ev.scaleStatus === 'ready' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                    <Icon name={ev.scaleStatus === 'ready' ? 'Eye' : 'EyeOff'} size={14} />
+                                                    {ev.scaleStatus === 'ready' ? 'Escala Publicada' : 'Rascunho'}
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -1552,9 +1660,9 @@
             useEffect(() => { if (!firebaseUser) return; const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (docSnap) => { if (docSnap.exists()) { setAppSettings(prev => ({ ...prev, ...docSnap.data() })); } }); return () => unsubSettings(); }, [firebaseUser]);
             const handleUpdateSettings = async (newSettings) => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), newSettings, { merge: true }); setToastMsg("Configurações salvas!"); } catch (e) { console.error(e); setToastMsg("Erro ao salvar."); } };
             
-            useEffect(() => { if (!firebaseUser) return; const seedData = async () => { const masterDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master')); if (!masterDoc.exists()) { const initialUsers = [ { name: "Master", pass: "adm2026", role: "master" }, { name: "Areli Castro", pass: "areli2026", role: "user" }, { name: "Isabelle Neves", pass: "belle2026", role: "user" }, { name: "Felipe Silva", pass: "felipe2026", role: "user" }, { name: "Adriel Carvalho", pass: "adriel2026", role: "user" }, { name: "Charles Santos", pass: "charles2026", role: "user" }, { name: "Leandro da Silva", pass: "leo2026", role: "user" }, { name: "Leandro Cavalcante", pass: "leo2026", role: "user" }, { name: "Julia Gonçalves", pass: "julia2026", role: "user" }, { name: "Macário", pass: "macario2026", role: "user" }, { name: "Maranhão", pass: "maranhao2026", role: "user" }, { name: "Bruno Ventura", pass: "bruno2026", role: "user" } ]; const batch = writeBatch(db); initialUsers.forEach(u => { const id = u.name.trim().toLowerCase().replace(/\s+/g, '_'); const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id); batch.set(docRef, { name: u.name, username: u.name, password: u.pass, role: u.role, status: 'active', unitType: u.role === 'master' ? 'Geral' : 'Regional', unitName: u.role === 'master' ? 'Sede' : 'Sede', participatingDepts: [], createdAt: new Date().toISOString() }); }); await batch.commit(); } }; seedData(); }, [firebaseUser]);
+            useEffect(() => { if (!firebaseUser) return; const seedData = async () => { const masterDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master')); if (!masterDoc.exists()) { const initialUsers = [ { name: "Master", pass: "adm2026", role: "master" }, { name: "Liderança", pass: "lider2026", role: "leader" }, { name: "Areli Castro", pass: "areli2026", role: "user" }, { name: "Isabelle Neves", pass: "belle2026", role: "user" }, { name: "Felipe Silva", pass: "felipe2026", role: "user" }, { name: "Adriel Carvalho", pass: "adriel2026", role: "user" }, { name: "Charles Santos", pass: "charles2026", role: "user" }, { name: "Leandro da Silva", pass: "leo2026", role: "user" }, { name: "Leandro Cavalcante", pass: "leo2026", role: "user" }, { name: "Julia Gonçalves", pass: "julia2026", role: "user" }, { name: "Macário", pass: "macario2026", role: "user" }, { name: "Maranhão", pass: "maranhao2026", role: "user" }, { name: "Bruno Ventura", pass: "bruno2026", role: "user" } ]; const batch = writeBatch(db); initialUsers.forEach(u => { const id = u.name.trim().toLowerCase().replace(/\s+/g, '_'); const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id); batch.set(docRef, { name: u.name, username: u.name, password: u.pass, role: u.role, status: 'active', unitType: u.role === 'master' ? 'Geral' : 'Regional', unitName: u.role === 'master' ? 'Sede' : 'Sede', participatingDepts: [], createdAt: new Date().toISOString() }); }); await batch.commit(); } }; seedData(); }, [firebaseUser]);
 
-            useEffect(() => { if (!firebaseUser || !userData) return; const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); setUserData({ uid: docSnap.id, ...data }); } }); const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => { if (snap.empty) { ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' })); } else { setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() }))); } }); let unsubAllUsers = () => {}; if (userData.role === 'admin' || userData.role === 'master') { unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })))); } return () => { unsubProfile(); unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); }; }, [firebaseUser, userData?.uid, userData?.role]);
+            useEffect(() => { if (!firebaseUser || !userData) return; const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); setUserData({ uid: docSnap.id, ...data }); } }); const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => { if (snap.empty) { ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' })); } else { setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() }))); } }); let unsubAllUsers = () => {}; if (userData.role === 'admin' || userData.role === 'master' || userData.role === 'leader') { unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })))); } return () => { unsubProfile(); unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); }; }, [firebaseUser, userData?.uid, userData?.role]);
 
             const handleLogin = async (e) => { e.preventDefault(); setLoginError(null); setAuthLoading(true); const username = e.target.username.value; const password = e.target.password.value; try { if (!firebaseUser) await signInAnonymously(auth); const userId = username.trim().toLowerCase().replace(/\s+/g, '_'); const userSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId)); if (userSnap.exists() && userSnap.data().password === password) { setUserData({ uid: userSnap.id, ...userSnap.data() }); } else { setLoginError("Credenciais inválidas."); } } catch (err) { setLoginError("Erro na conexão."); } finally { setAuthLoading(false); } };
             const handleLogout = () => setUserData(null);
@@ -1564,6 +1672,7 @@
             if (userData.status === 'blocked') return <BlockedScreen onLogout={handleLogout} />;
 
             const isAdmin = userData.role === 'admin' || userData.role === 'master';
+            const isLeader = userData.role === 'leader';
 
             return (
                 <div className="flex min-h-screen bg-gray-50 text-gray-800 font-sans selection:bg-primary/20">
@@ -1575,12 +1684,26 @@
                             <NavItem active={view === 'agenda'} iconName="Calendar" label={appSettings.tabNames.agenda} onClick={() => setView('agenda')} open={true} />
                             <NavItem active={view === 'congressos'} iconName="Trophy" label={appSettings.tabNames.congressos} onClick={() => setView('congressos')} open={true} />
                             <NavItem active={view === 'depts'} iconName="Briefcase" label={appSettings.tabNames.departments} onClick={() => setView('depts')} open={true} />
-                            {isAdmin && (<><div className="my-6 border-t border-gray-100"></div><p className="px-4 text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p><NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => setView('create_events')} open={true} /><NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => setView('manage_scales')} open={true} /><NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => setView('view_scale')} open={true} /><NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => setView('manage_team')} open={true} /><NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => setView('manage_depts')} open={true} /><NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => setView('reports')} open={true} /><div className="my-2"></div><NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => setView('admin_master')} open={true} /></>)}
+                            {(isAdmin || isLeader) && (<><div className="my-6 border-t border-gray-100"></div><p className="px-4 text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
+                            {isAdmin && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => setView('create_events')} open={true} />}
+                            <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => setView('manage_scales')} open={true} />
+                            {isAdmin && <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => setView('view_scale')} open={true} />}
+                            {isAdmin && <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => setView('manage_team')} open={true} />}
+                            {isAdmin && <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => setView('manage_depts')} open={true} />}
+                            {isAdmin && <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => setView('reports')} open={true} />}
+                            {isAdmin && <><div className="my-2"></div><NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => setView('admin_master')} open={true} /></>}</>)}
                         </nav>
                         <div className="mt-8 pt-6 border-t border-gray-100 flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-black text-gray-500 uppercase">{userData.name.charAt(0)}</div><div className="flex-1 overflow-hidden"><p className="font-bold text-xs truncate text-gray-800">{userData.name}</p><button onClick={handleLogout} className="text-[10px] text-red-400 font-bold uppercase hover:text-red-600">Sair</button></div></div>
                     </aside>
-                    {isAdmin && (<div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-50"><div className="flex items-center gap-2"><div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white overflow-hidden">{appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={16} />}</div><h1 className="font-black uppercase text-xs text-gray-800">{appSettings.loginTitle}</h1></div><button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-gray-50 rounded-xl text-gray-500"><Icon name="Menu" size={24} /></button></div>)}
-                    {isAdmin && isMobileMenuOpen && (<div className="fixed inset-0 z-[60] flex md:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div><div className="relative w-64 bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in"><div className="flex justify-between items-center mb-8"><h2 className="font-black uppercase text-lg text-gray-800">Menu Admin</h2><button onClick={() => setIsMobileMenuOpen(false)}><Icon name="X" size={24} /></button></div><div className="space-y-2"><p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p><NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => { setView('create_events'); setIsMobileMenuOpen(false); }} open={true} /><NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => { setView('manage_scales'); setIsMobileMenuOpen(false); }} open={true} /><NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => { setView('view_scale'); setIsMobileMenuOpen(false); }} open={true} /><NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => { setView('manage_team'); setIsMobileMenuOpen(false); }} open={true} /><NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => { setView('manage_depts'); setIsMobileMenuOpen(false); }} open={true} /><NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => { setView('reports'); setIsMobileMenuOpen(false); }} open={true} /><div className="my-4 border-t border-gray-100"></div><NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => { setView('admin_master'); setIsMobileMenuOpen(false); }} open={true} /></div></div></div>)}
+                    {(isAdmin || isLeader) && (<div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-50"><div className="flex items-center gap-2"><div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white overflow-hidden">{appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={16} />}</div><h1 className="font-black uppercase text-xs text-gray-800">{appSettings.loginTitle}</h1></div><button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-gray-50 rounded-xl text-gray-500"><Icon name="Menu" size={24} /></button></div>)}
+                    {(isAdmin || isLeader) && isMobileMenuOpen && (<div className="fixed inset-0 z-[60] flex md:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div><div className="relative w-64 bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in"><div className="flex justify-between items-center mb-8"><h2 className="font-black uppercase text-lg text-gray-800">Menu Admin</h2><button onClick={() => setIsMobileMenuOpen(false)}><Icon name="X" size={24} /></button></div><div className="space-y-2"><p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
+                    {isAdmin && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => { setView('create_events'); setIsMobileMenuOpen(false); }} open={true} />}
+                    <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => { setView('manage_scales'); setIsMobileMenuOpen(false); }} open={true} />
+                    {isAdmin && <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => { setView('view_scale'); setIsMobileMenuOpen(false); }} open={true} />}
+                    {isAdmin && <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => { setView('manage_team'); setIsMobileMenuOpen(false); }} open={true} />}
+                    {isAdmin && <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => { setView('manage_depts'); setIsMobileMenuOpen(false); }} open={true} />}
+                    {isAdmin && <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => { setView('reports'); setIsMobileMenuOpen(false); }} open={true} />}
+                    {isAdmin && <><div className="my-4 border-t border-gray-100"></div><NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => { setView('admin_master'); setIsMobileMenuOpen(false); }} open={true} /></>}</div></div></div>)}
                     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-2 pb-safe flex justify-around items-center z-50 no-print shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                          <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}><Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /><span className="text-[9px] font-bold">Painel</span></button>
                          <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} /><span className="text-[9px] font-bold">Agenda</span></button>
@@ -1588,17 +1711,17 @@
                          <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>
                          <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400"><Icon name="LogOut" size={20} /><span className="text-[9px] font-bold">Sair</span></button>
                     </div>
-                    <main className={`flex-1 md:ml-72 p-4 md:p-12 mb-24 md:mb-0 max-w-7xl mx-auto w-full ${isAdmin ? 'mt-16 md:mt-0' : ''}`}>
+                    <main className={`flex-1 md:ml-72 p-4 md:p-12 mb-24 md:mb-0 max-w-7xl mx-auto w-full ${(isAdmin || isLeader) ? 'mt-16 md:mt-0' : ''}`}>
                         {view === 'dashboard' && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}
                         {view === 'agenda' && <AgendaView title={appSettings.tabNames.agenda} category="Agenda Ministerial" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
                         {view === 'congressos' && <AgendaView title={appSettings.tabNames.congressos} category="Congressos" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
                         {view === 'view_scale' && isAdmin && <ViewScaleView events={events} attendance={attendance} departments={departments} />}
                         {view === 'depts' && <UserDepartments title={appSettings.tabNames.departments} departments={departments} userProfile={userData} />}
                         {isAdmin && view === 'create_events' && <AdminCreateEventsView events={events} showToast={showToast} />}
-                        {isAdmin && view === 'manage_scales' && <AdminScalesView events={events} attendance={attendance} users={allUsers} departments={departments} showToast={showToast} />}
+                        {(isAdmin || isLeader) && view === 'manage_scales' && <AdminScalesView events={events} attendance={attendance} users={allUsers} departments={departments} showToast={showToast} userProfile={userData} />}
                         {isAdmin && view === 'manage_team' && <AdminTeamView users={allUsers} departments={departments} showToast={showToast} />}
                         {isAdmin && view === 'manage_depts' && <AdminDepartmentsView departments={departments} showToast={showToast} />}
-                        {isAdmin && view === 'reports' && <ReportsView title={appSettings.tabNames.reports} attendance={attendance} allUsers={allUsers} departments={departments} />}
+                        {isAdmin && view === 'reports' && <ReportsView title={appSettings.tabNames.reports} attendance={attendance} allUsers={allUsers} departments={departments} events={events} showToast={showToast} />}
                         {isAdmin && view === 'admin_master' && <MasterSettingsView settings={appSettings} onUpdateSettings={handleUpdateSettings} showToast={showToast} />}
                     </main>
                     {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}

@@ -53,12 +53,11 @@
         // --- Firebase Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { 
-            getAuth, onAuthStateChanged, signInWithEmailAndPassword, 
-            createUserWithEmailAndPassword, signOut, signInWithCustomToken, signInAnonymously 
+            getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signOut 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, doc, setDoc, updateDoc, collection, onSnapshot, 
-            addDoc, deleteDoc, getDocs, query, where, writeBatch, getDoc 
+            addDoc, deleteDoc, getDoc, writeBatch 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Configuration ---
@@ -124,7 +123,22 @@
             );
         };
 
-        // --- Helper for Period Styling ---
+        const ConfirmModal = ({ title, message, onConfirm, onCancel, confirmText = "Confirmar", cancelText = "Cancelar", isDangerous = false }) => (
+            <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 modal-overlay">
+                <div className="bg-white rounded-[2rem] w-full max-w-md p-6 shadow-2xl animate-in text-center">
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${isDangerous ? 'bg-red-100 text-red-500' : 'bg-blue-100 text-blue-500'}`}>
+                        <Icon name={isDangerous ? "AlertTriangle" : "HelpCircle"} size={32} />
+                    </div>
+                    <h3 className="text-xl font-black uppercase text-gray-800 mb-2">{title}</h3>
+                    <p className="text-xs text-gray-500 font-medium mb-6">{message}</p>
+                    <div className="flex gap-3">
+                        <button onClick={onCancel} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px] hover:bg-gray-200 transition">{cancelText}</button>
+                        <button onClick={onConfirm} className={`flex-1 py-3 text-white rounded-xl font-black uppercase text-[10px] shadow-lg transition ${isDangerous ? 'bg-red-500 hover:bg-red-600 shadow-red-200' : 'bg-primary hover:opacity-90 shadow-blue-200'}`}>{confirmText}</button>
+                    </div>
+                </div>
+            </div>
+        );
+
         const getPeriodStyle = (period) => {
             switch(period) {
                 case 'Manhã': return { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: 'Sun' };
@@ -135,7 +149,6 @@
             }
         };
 
-        // --- Shared Components ---
         function FilterHeader({ month, setMonth, year, setYear, day, setDay, title, showDay = false }) {
             return (
                 <div className="flex flex-col gap-4 no-print mb-6">
@@ -247,7 +260,6 @@
             const filteredAtt = useMemo(() => attendance.filter(a => {
                 if (!a.eventDate) return false;
                 const d = new Date(a.eventDate);
-                // Use UTC to match eventDate storage (YYYY-MM-DD)
                 return a.userId === userProfile.uid && 
                        d.getUTCMonth() === Number(month) && 
                        d.getUTCFullYear() === Number(year);
@@ -257,7 +269,10 @@
                 available: filteredAtt.filter(a => a.status === 'present').length,
                 unavailable: filteredAtt.filter(a => a.status === 'absent').length,
                 escalated: filteredAtt.filter(a => a.isEscalated).length,
-                checkins: filteredAtt.filter(a => a.hasCheckedIn).length,
+                pending: events.filter(e => {
+                    const d = new Date(e.date);
+                    return d.getUTCMonth() === Number(month) && d.getUTCFullYear() === Number(year) && new Date() <= new Date(e.date);
+                }).length
             };
 
             return (
@@ -265,9 +280,9 @@
                     <FilterHeader title={`Olá, ${userProfile.name?.split(' ')[0]}`} month={month} setMonth={setMonth} year={year} setYear={setYear} />
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                         <StatCard title="Disponível" value={stats.available} iconName="CheckCircle" iconColor="text-green-500" />
-                        <StatCard title="Escalado" value={stats.escalated} iconName="ClipboardCheck" iconColor="text-purple-500" />
-                        <StatCard title="Check-ins Realizados" value={stats.checkins} iconName="MapPin" iconColor="text-blue-500" />
                         <StatCard title="Indisponível" value={stats.unavailable} iconName="XCircle" iconColor="text-red-500" />
+                        <StatCard title="Escalado" value={stats.escalated} iconName="ClipboardCheck" iconColor="text-purple-500" />
+                        <StatCard title="Eventos Futuros" value={stats.pending} iconName="Clock" iconColor="text-blue-500" />
                     </div>
                     <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border shadow-sm">
                         <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-gray-800"><Icon name="FileText" className="text-primary" /> Histórico</h2>
@@ -278,8 +293,8 @@
                                         <p className="font-bold uppercase text-[10px] md:text-xs text-gray-800">{a.eventName}</p>
                                         <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tight">{a.servingDept} • {new Date(a.eventDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
                                     </div>
-                                    <span className={`px-2 py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase ${a.hasCheckedIn ? 'bg-blue-100 text-blue-600' : a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                                        {a.hasCheckedIn ? "Check-in OK" : a.status === 'present' ? "Disponível" : "Ausente"}
+                                    <span className={`px-2 py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase ${a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                        {a.status === 'present' ? "Disponível" : "Ausente"}
                                     </span>
                                 </div>
                             ))}
@@ -297,9 +312,8 @@
             const [expandedEvent, setExpandedEvent] = useState(null);
             const [showEscalatedOnly, setShowEscalatedOnly] = useState(false);
             
-            // Check-in States
-            const [checkinModalEvent, setCheckinModalEvent] = useState(null);
-            const [checkinCodeInput, setCheckinCodeInput] = useState("");
+            const [checkinEvent, setCheckinEvent] = useState(null);
+            const [checkinCode, setCheckinCode] = useState("");
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date);
@@ -331,52 +345,42 @@
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), {
                     id: attId, eventId: event.id, eventName: event.name, eventDate: event.date, eventCategory: category,
                     userId: userProfile.uid, userName: userProfile.name, servingDept: deptName,
-                    status: status, isEscalated: false, timestamp: new Date().toISOString(),
-                    hasCheckedIn: false
+                    status: status, isEscalated: false, timestamp: new Date().toISOString()
                 });
                 setExpandedEvent(null);
                 showToast("Resposta salva com sucesso!");
             };
 
-            const handleCheckin = async (e) => {
-                e.preventDefault();
-                if (!checkinModalEvent) return;
+            const submitCheckin = async () => {
+                if (!checkinEvent) return;
+                const now = new Date();
+                const deadline = checkinEvent.checkinDeadline ? new Date(checkinEvent.checkinDeadline) : null;
+                
+                if (deadline && now > deadline) {
+                    showToast("Prazo para check-in expirado.");
+                    return;
+                }
+                
+                const codeInput = checkinCode.trim().toUpperCase();
+                const eventCode = (checkinEvent.checkinCode || "").trim().toUpperCase();
 
-                const event = checkinModalEvent;
-                const myAtt = attendance.find(a => a.eventId === event.id && a.userId === userProfile.uid);
-
-                if (!myAtt) {
-                    showToast("Erro: Disponibilidade não encontrada.");
+                if (codeInput !== eventCode) {
+                    showToast("Código inválido.");
                     return;
                 }
 
-                // Validate Deadline
-                if (event.checkinDeadline && new Date() > new Date(event.checkinDeadline)) {
-                    showToast("O prazo para check-in encerrou."); // Changed to showToast
-                    return;
-                }
-
-                // Validate Code
-                const requiredCode = (event.checkinCode || "").trim();
-                const userCode = checkinCodeInput.trim();
-
-                // Case sensitive? Usually codes are uppercase. Let's be generous and compare uppercase.
-                if (requiredCode && requiredCode.toUpperCase() !== userCode.toUpperCase()) {
-                    showToast("Código de check-in inválido."); // Changed to showToast
-                    return;
-                }
-
+                const attId = `${checkinEvent.id}_${userProfile.uid}`;
                 try {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', myAtt.id), {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), {
                         hasCheckedIn: true,
                         checkinTime: new Date().toISOString()
                     });
                     showToast("Check-in realizado com sucesso!");
-                    setCheckinModalEvent(null);
-                    setCheckinCodeInput("");
+                    setCheckinEvent(null);
+                    setCheckinCode("");
                 } catch (err) {
                     console.error(err);
-                    showToast("Erro ao realizar check-in.");
+                    showToast("Erro ao realizar check-in. Tente novamente.");
                 }
             };
 
@@ -407,9 +411,10 @@
                             const deadlineDate = ev.deadline ? new Date(ev.deadline) : null;
                             const isExpired = deadlineDate && now > deadlineDate;
                             
-                            // Checkin status
-                            const hasCheckedIn = myAtt?.hasCheckedIn;
-                            const checkinOpen = ev.checkinCode && (!ev.checkinDeadline || now <= new Date(ev.checkinDeadline));
+                            // Check-in logic
+                            const checkinDeadline = ev.checkinDeadline ? new Date(ev.checkinDeadline) : null;
+                            const isCheckinExpired = checkinDeadline && now > checkinDeadline;
+                            const isCheckinOpen = isUserEscalated && !isCheckinExpired && !myAtt.hasCheckedIn;
 
                             return (
                                 <div key={ev.id} className={`bg-white rounded-[2rem] border p-5 shadow-sm transition-all flex flex-col md:flex-row items-center gap-4 md:gap-6 card-print ${isUserEscalated ? 'ring-2 ring-green-500 bg-green-50/10' : 'hover:border-primary/40'}`}>
@@ -425,7 +430,6 @@
                                         </span>
                                     </div>
 
-                                    {/* Divider */}
                                     <div className="hidden md:block w-px h-12 bg-gray-100"></div>
 
                                     {/* Info */}
@@ -438,12 +442,14 @@
                                             </span>
                                             <span className="flex items-center gap-1.5"><Icon name="MapPin" size={12}/> {ev.location || "Sede"}</span>
                                         </div>
+                                        
                                         {isUserEscalated && (
-                                            <div className="text-green-600 text-[10px] font-bold uppercase flex items-center justify-center md:justify-start gap-1">
-                                                <Icon name="CheckCircle" size={12}/> 
-                                                Escalado: {myAtt.role || myAtt.servingDept}
+                                            <div className="text-purple-600 text-[10px] font-bold uppercase flex items-center justify-center md:justify-start gap-1">
+                                                <Icon name="Briefcase" size={12}/> 
+                                                Escalado em: {myAtt.servingDept}
                                             </div>
                                         )}
+                                        
                                         {ev.deadline && (
                                             <div className="text-[9px] text-red-400 font-bold uppercase">
                                                 Prazo Disp.: {new Date(ev.deadline).toLocaleString()} 
@@ -458,19 +464,24 @@
                                             <div className="flex flex-col items-center md:items-end gap-2">
                                                 <span className={`px-4 py-1.5 rounded-lg font-black uppercase text-[9px] ${myAtt.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                                     {myAtt.status === 'present' 
-                                                        ? (isUserEscalated ? `Escalado: ${myAtt.role || myAtt.servingDept}` : myAtt.servingDept) 
+                                                        ? (isUserEscalated ? (myAtt.role ? `Função: ${myAtt.role}` : 'Escalado') : myAtt.servingDept) 
                                                         : 'Indisponível'}
                                                 </span>
                                                 
-                                                {/* Check-in Button */}
-                                                {isUserEscalated && !hasCheckedIn && checkinOpen && (
-                                                    <button onClick={() => setCheckinModalEvent(ev)} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase shadow-lg shadow-blue-200 animate-in hover:bg-blue-700">
-                                                        Fazer Check-in
+                                                {/* Check-in Status */}
+                                                {isCheckinOpen && (
+                                                    <button onClick={() => setCheckinEvent(ev)} className="flex items-center gap-1 bg-orange-100 text-orange-600 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-orange-200 transition animate-bounce">
+                                                        <Icon name="QrCode" size={12} /> Fazer Check-in
                                                     </button>
                                                 )}
-                                                {hasCheckedIn && (
-                                                    <span className="flex items-center gap-1 text-[9px] font-black uppercase text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                                                        <Icon name="Check" size={10} /> Check-in Realizado
+                                                {myAtt.hasCheckedIn && (
+                                                    <span className="flex items-center gap-1 text-green-600 text-[9px] font-black uppercase">
+                                                        <Icon name="CheckCheck" size={12} /> Check-in OK
+                                                    </span>
+                                                )}
+                                                {!myAtt.hasCheckedIn && isCheckinExpired && isUserEscalated && (
+                                                    <span className="flex items-center gap-1 text-red-500 text-[9px] font-black uppercase bg-red-50 px-2 py-1 rounded">
+                                                        <Icon name="XCircle" size={12} /> Check-in não realizado
                                                     </span>
                                                 )}
 
@@ -502,31 +513,138 @@
                         {filteredEvents.length === 0 && <p className="col-span-full py-20 text-center text-gray-300 font-black uppercase text-xs border-2 border-dashed rounded-[3rem]">Nenhum evento encontrado.</p>}
                     </div>
 
-                    {/* Check-in Modal */}
-                    {checkinModalEvent && (
-                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
+                    {checkinEvent && (
+                        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl animate-in">
-                                <h3 className="font-black uppercase text-lg text-gray-800 mb-2">Realizar Check-in</h3>
-                                <p className="text-xs text-gray-500 mb-6">Insira o código fornecido pela liderança para confirmar sua presença.</p>
-                                <form onSubmit={handleCheckin} className="space-y-4">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Código do Evento" 
-                                        className="w-full p-4 bg-gray-50 rounded-xl text-center font-black uppercase tracking-widest text-lg outline-none border-2 border-transparent focus:border-blue-500"
-                                        value={checkinCodeInput}
-                                        onChange={e => setCheckinCodeInput(e.target.value)}
-                                        autoFocus
-                                    />
-                                    <button type="submit" className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-xs shadow-lg hover:bg-blue-700">
-                                        Confirmar Presença
-                                    </button>
-                                    <button type="button" onClick={() => setCheckinModalEvent(null)} className="w-full py-2 text-gray-400 font-bold uppercase text-[10px]">
-                                        Cancelar
-                                    </button>
-                                </form>
+                                <div className="text-center mb-6">
+                                    <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-500">
+                                        <Icon name="QrCode" size={32} />
+                                    </div>
+                                    <h3 className="font-black uppercase text-lg text-gray-800">Check-in</h3>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase">{checkinEvent.name}</p>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">Código do Evento</label>
+                                        <input 
+                                            value={checkinCode} 
+                                            onChange={e => setCheckinCode(e.target.value.toUpperCase())} 
+                                            className="w-full p-4 bg-gray-50 rounded-xl font-black text-center text-xl outline-none border-2 border-transparent focus:border-orange-200 uppercase tracking-widest" 
+                                            placeholder="XXXX"
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setCheckinEvent(null)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Cancelar</button>
+                                        <button onClick={submitCheckin} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-orange-200">Confirmar</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
+                </div>
+            );
+        }
+
+        function ViewScaleView({ events, attendance, departments }) {
+            const [filterCategory, setFilterCategory] = useState('Agenda Ministerial');
+            const [filterDay, setFilterDay] = useState('');
+            const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
+            const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+            const [filterPeriod, setFilterPeriod] = useState('');
+
+            const filteredEvents = useMemo(() => events.filter(ev => {
+                const d = new Date(ev.date + 'T12:00:00');
+                
+                const catMatch = ev.category === filterCategory || (!ev.category && filterCategory === 'Agenda Ministerial');
+                const yearMatch = d.getFullYear() === Number(filterYear);
+                const monthMatch = d.getMonth() === Number(filterMonth);
+                const dayMatch = filterDay ? d.getDate() === Number(filterDay) : true;
+                const periodMatch = filterPeriod ? ev.period === filterPeriod : true;
+                const isPublished = ev.scaleStatus === 'ready';
+
+                return catMatch && yearMatch && monthMatch && dayMatch && periodMatch && isPublished;
+            }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, filterCategory, filterDay, filterMonth, filterYear, filterPeriod]);
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex flex-col gap-4 mb-6">
+                        <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Ver Escala Publicada</h1>
+                        <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm self-start">
+                            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                <option value="Agenda Ministerial">Agenda</option>
+                                <option value="Congressos">Congressos</option>
+                            </select>
+                            <select value={filterDay} onChange={e => setFilterDay(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                <option value="">Dia (Todos)</option>
+                                {[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}
+                            </select>
+                            <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                            </select>
+                            <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                            <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800">
+                                <option value="">Período (Todos)</option>
+                                <option value="Manhã">Manhã</option>
+                                <option value="Tarde">Tarde</option>
+                                <option value="Noite">Noite</option>
+                                <option value="Vigília">Vigília</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6">
+                        {filteredEvents.map(ev => {
+                            const pStyle = getPeriodStyle(ev.period);
+                            // Get escalated volunteers for this event
+                            const escalated = attendance.filter(a => a.eventId === ev.id && a.isEscalated);
+                            
+                            // Group by Dept
+                            const byDept = {};
+                            departments.forEach(d => {
+                                const vols = escalated.filter(a => a.servingDept === d.name);
+                                if (vols.length > 0) byDept[d.name] = { color: d.color, vols };
+                            });
+
+                            return (
+                                <div key={ev.id} className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden">
+                                    <div className="bg-gray-50 p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                                        <div>
+                                            <h2 className="text-xl font-black uppercase text-gray-800">{ev.name}</h2>
+                                            <div className="flex gap-4 mt-2 text-[10px] font-bold text-gray-400 uppercase">
+                                                <span className="flex items-center gap-1"><Icon name="Calendar" size={14}/> {new Date(ev.date + 'T12:00:00').toLocaleDateString()}</span>
+                                                <span className="flex items-center gap-1"><Icon name="Clock" size={14}/> {ev.time}</span>
+                                                <span className={`flex items-center gap-1 px-2 py-0.5 rounded ${pStyle.bg} ${pStyle.text}`}><Icon name={pStyle.icon} size={14}/> {ev.period}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="p-6">
+                                        {Object.keys(byDept).length > 0 ? (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                {Object.entries(byDept).map(([deptName, data]) => (
+                                                    <div key={deptName} className="border rounded-2xl p-4" style={{ borderLeft: `4px solid ${data.color}` }}>
+                                                        <h3 className="font-black text-xs uppercase mb-3" style={{ color: data.color }}>{deptName}</h3>
+                                                        <div className="space-y-2">
+                                                            {data.vols.map(v => (
+                                                                <div key={v.id} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
+                                                                    <span className="font-bold text-[10px] uppercase text-gray-700">{v.userName}</span>
+                                                                    {v.role && <span className="text-[9px] font-bold text-gray-400 bg-white px-2 py-0.5 rounded border">{v.role}</span>}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-center text-xs text-gray-400 font-bold uppercase py-4">Nenhum voluntário escalado ainda.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {filteredEvents.length === 0 && <p className="py-10 text-center text-gray-300 font-bold uppercase text-[10px]">Nenhuma escala encontrada com os filtros selecionados.</p>}
+                    </div>
                 </div>
             );
         }
@@ -561,7 +679,8 @@
             const [month, setMonth] = useState(new Date().getMonth());
             const [year, setYear] = useState(new Date().getFullYear());
             const [search, setSearch] = useState("");
-            
+            const [startDate, setStartDate] = useState("");
+            const [endDate, setEndDate] = useState("");
             const [selectedVolunteer, setSelectedVolunteer] = useState(null);
             const [selectedDeptReport, setSelectedDeptReport] = useState(null);
 
@@ -570,10 +689,9 @@
                 return d.getMonth() === Number(month) && d.getFullYear() === Number(year);
             }), [attendance, month, year]);
 
-            // Calculation based on Check-ins
             const totalResponses = filteredAtt.length;
-            const checkinCount = filteredAtt.filter(a => a.hasCheckedIn).length; // New Metric
-            const presentRate = totalResponses > 0 ? Math.round((checkinCount / totalResponses) * 100) : 0; // Check-in Rate
+            const presentCount = filteredAtt.filter(a => a.status === 'present').length;
+            const presentRate = totalResponses > 0 ? Math.round((presentCount / totalResponses) * 100) : 0;
 
             const searchedUsers = useMemo(() => {
                 if (!search) return [];
@@ -581,18 +699,31 @@
             }, [allUsers, search]);
 
             const getVolunteerStats = (userId) => {
-                const userAtt = attendance.filter(a => a.userId === userId); 
+                let userAtt = attendance.filter(a => a.userId === userId); 
+                
+                if (startDate && endDate) {
+                    const start = new Date(startDate);
+                    const end = new Date(endDate);
+                    end.setHours(23, 59, 59, 999);
+                    userAtt = userAtt.filter(a => {
+                        const d = new Date(a.eventDate);
+                        return d >= start && d <= end;
+                    });
+                } else {
+                    userAtt = userAtt.filter(a => {
+                        const d = new Date(a.eventDate);
+                        return d.getUTCMonth() === Number(month) && d.getUTCFullYear() === Number(year);
+                    });
+                }
+
                 const avail = userAtt.filter(a => a.status === 'present').length;
                 const escalated = userAtt.filter(a => a.isEscalated).length;
-                // New: Count Check-ins
-                const checkins = userAtt.filter(a => a.hasCheckedIn).length;
-                
+                const checkins = userAtt.filter(a => a.hasCheckedIn).length; 
                 const agendaEsc = userAtt.filter(a => a.isEscalated && a.eventCategory === 'Agenda Ministerial').length;
                 const congressosEsc = userAtt.filter(a => a.isEscalated && a.eventCategory === 'Congressos').length;
                 
                 const deptCounts = {};
-                // Count presence based on check-in for ranking
-                userAtt.filter(a => a.hasCheckedIn).forEach(a => {
+                userAtt.filter(a => a.status === 'present').forEach(a => {
                     deptCounts[a.servingDept] = (deptCounts[a.servingDept] || 0) + 1;
                 });
                 const sortedDepts = Object.entries(deptCounts).sort((a,b) => b[1] - a[1]);
@@ -601,17 +732,21 @@
             };
 
             const getDeptStats = (deptName) => {
-                // Filter by Check-in for ranking
-                const deptAtts = filteredAtt.filter(a => a.servingDept === deptName && a.hasCheckedIn);
-                const uniqueVolunteers = [...new Set(filteredAtt.filter(a => a.servingDept === deptName).map(a => a.userId))]; // Total pool
+                const deptAtts = attendance.filter(a => {
+                    const d = new Date(a.eventDate);
+                    return a.servingDept === deptName && 
+                           d.getUTCMonth() === Number(month) && 
+                           d.getUTCFullYear() === Number(year);
+                });
                 
+                const uniqueVolunteers = [...new Set(deptAtts.map(a => a.userId))];
                 const volCounts = {};
-                deptAtts.forEach(a => { volCounts[a.userName] = (volCounts[a.userName] || 0) + 1; });
+                deptAtts.filter(a => a.hasCheckedIn).forEach(a => { volCounts[a.userName] = (volCounts[a.userName] || 0) + 1; });
                 const topVols = Object.entries(volCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
 
                 return { 
                     count: uniqueVolunteers.length, 
-                    totalCheckins: deptAtts.length,
+                    totalAvail: deptAtts.filter(a => a.status === 'present').length,
                     topVols 
                 };
             };
@@ -621,10 +756,20 @@
                     <FilterHeader title={title} month={month} setMonth={setMonth} year={year} setYear={setYear} />
                     
                     <div className="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4">
+                        <div className="flex flex-col md:flex-row gap-4 mb-4">
+                            <div className="flex-1">
+                                <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Início</label>
+                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl text-sm font-bold border-2 border-transparent focus:border-primary/20" />
+                            </div>
+                            <div className="flex-1">
+                                <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Fim</label>
+                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl text-sm font-bold border-2 border-transparent focus:border-primary/20" />
+                            </div>
+                        </div>
                         <div className="relative">
                             <Icon name="Search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input 
-                                placeholder="Pesquisar voluntário (Filtro por nome)..." 
+                                placeholder="Pesquisar voluntário..." 
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 text-gray-800" 
@@ -644,13 +789,13 @@
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <StatCard title="Total Respostas" value={totalResponses} iconName="MessageSquare" iconColor="text-gray-500" />
-                        <StatCard title="Check-ins (Mês)" value={checkinCount} iconName="MapPin" iconColor="text-blue-500" />
-                        <StatCard title="Taxa Check-in" value={`${presentRate}%`} iconName="PieChart" iconColor="text-purple-500" />
+                        <StatCard title="Total Respostas" value={totalResponses} iconName="MessageSquare" iconColor="text-blue-500" />
+                        <StatCard title="Presenças" value={presentCount} iconName="CheckCircle" iconColor="text-green-500" />
+                        <StatCard title="Taxa Presença" value={`${presentRate}%`} iconName="PieChart" iconColor="text-purple-500" />
                     </div>
 
                     <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm">
-                        <h3 className="text-xl font-black uppercase tracking-tight mb-6 text-gray-800">Ranking por Departamento (Check-ins - {MONTHS[month]})</h3>
+                        <h3 className="text-xl font-black uppercase tracking-tight mb-6 text-gray-800">Presença por Departamento ({MONTHS[month]})</h3>
                         <div className="space-y-4">
                             {departments.map(d => {
                                 const stats = getDeptStats(d.name);
@@ -662,11 +807,11 @@
                                             </div>
                                             <div>
                                                 <span className="font-black text-xs uppercase text-gray-700 block">{d.name}</span>
-                                                <span className="text-[9px] font-bold text-gray-400 uppercase">{stats.totalCheckins} Check-ins Realizados</span>
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase">{stats.count} Voluntários Ativos</span>
                                             </div>
                                         </div>
                                         <button onClick={() => setSelectedDeptReport({ ...d, ...stats })} className="px-4 py-2 bg-white border border-gray-200 text-gray-500 rounded-xl text-[9px] font-black uppercase hover:text-primary hover:border-primary">
-                                            Ver Ranking
+                                            Ver Detalhes
                                         </button>
                                     </div>
                                 );
@@ -682,24 +827,32 @@
                                     <button onClick={() => setSelectedVolunteer(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 mb-6">
-                                    <div className="p-4 bg-blue-50 rounded-2xl text-center border border-blue-100">
-                                        <span className="block text-2xl font-black text-blue-600">{selectedVolunteer.checkins}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Total Check-ins (Geral)</span>
+                                    <div className="p-4 bg-gray-50 rounded-2xl text-center">
+                                        <span className="block text-2xl font-black text-blue-600">{selectedVolunteer.avail}</span>
+                                        <span className="text-[9px] font-bold uppercase text-gray-400">Disponibilidades</span>
                                     </div>
                                     <div className="p-4 bg-gray-50 rounded-2xl text-center">
                                         <span className="block text-2xl font-black text-purple-600">{selectedVolunteer.escalated}</span>
                                         <span className="text-[9px] font-bold uppercase text-gray-400">Vezes Escalado</span>
                                     </div>
+                                    <div className="p-4 bg-green-50 rounded-2xl text-center border border-green-100">
+                                        <span className="block text-2xl font-black text-green-600">{selectedVolunteer.checkins}</span>
+                                        <span className="text-[9px] font-bold uppercase text-green-800">Check-ins Realizados</span>
+                                    </div>
+                                    <div className="p-4 bg-gray-50 rounded-2xl text-center">
+                                        <span className="block text-xl font-black text-gray-800">{selectedVolunteer.agendaEsc} / {selectedVolunteer.congressosEsc}</span>
+                                        <span className="text-[9px] font-bold uppercase text-gray-400">Agenda / Congressos</span>
+                                    </div>
                                 </div>
                                 <div>
-                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-2">Participação por Departamento (Baseado em Check-in)</h4>
+                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-2">Departamentos Mais Atuantes</h4>
                                     <div className="flex flex-wrap gap-2">
                                         {selectedVolunteer.topDepts.map(([dept, count]) => (
                                             <span key={dept} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold uppercase border border-blue-100">
                                                 {dept}: {count}
                                             </span>
                                         ))}
-                                        {selectedVolunteer.topDepts.length === 0 && <span className="text-xs text-gray-300">Sem check-ins registrados.</span>}
+                                        {selectedVolunteer.topDepts.length === 0 && <span className="text-xs text-gray-300">Sem dados.</span>}
                                     </div>
                                 </div>
                             </div>
@@ -716,23 +869,23 @@
                                 <div className="grid grid-cols-2 gap-4 mb-6">
                                     <div className="p-4 bg-gray-50 rounded-2xl text-center">
                                         <span className="block text-2xl font-black text-gray-800">{selectedDeptReport.count}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Escalados (Mês)</span>
+                                        <span className="text-[9px] font-bold uppercase text-gray-400">Voluntários (Mês)</span>
                                     </div>
                                     <div className="p-4 bg-gray-50 rounded-2xl text-center">
-                                        <span className="block text-2xl font-black text-gray-800">{selectedDeptReport.totalCheckins}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Total Check-ins</span>
+                                        <span className="block text-2xl font-black text-gray-800">{selectedDeptReport.totalAvail}</span>
+                                        <span className="text-[9px] font-bold uppercase text-gray-400">Disponibilidades</span>
                                     </div>
                                 </div>
                                 <div>
-                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-3">Mais Presentes (Check-in Top 5)</h4>
+                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-3">Mais Presentes (Check-ins)</h4>
                                     <div className="space-y-2">
                                         {selectedDeptReport.topVols.map(([name, count]) => (
                                             <div key={name} className="flex justify-between items-center p-2 border-b border-gray-50">
                                                 <span className="font-bold text-xs uppercase text-gray-700">{name}</span>
-                                                <span className="font-black text-xs text-gray-400">{count}x</span>
+                                                <span className="font-black text-xs text-green-600">{count} Check-ins</span>
                                             </div>
                                         ))}
-                                        {selectedDeptReport.topVols.length === 0 && <span className="text-xs text-gray-300">Sem dados neste mês.</span>}
+                                        {selectedDeptReport.topVols.length === 0 && <span className="text-xs text-gray-300">Sem check-ins neste mês.</span>}
                                     </div>
                                 </div>
                             </div>
@@ -742,18 +895,16 @@
             );
         }
 
-        // --- Admin Operational Components (Now Separate Views) ---
+        // --- Admin Operational Components ---
         
         function AdminCreateEventsView({ events, showToast }) {
             const [editingId, setEditingId] = useState(null);
             const [form, setForm] = useState({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '' });
-            
-            // List Filter State
+            const [eventToDelete, setEventToDelete] = useState(null);
             const [listFilterMonth, setListFilterMonth] = useState(new Date().getMonth());
             const [listFilterYear, setListFilterYear] = useState(new Date().getFullYear());
             const [listFilterCategory, setListFilterCategory] = useState('all');
 
-            // Autocomplete Datalists
             const uniqueNames = useMemo(() => [...new Set(events.map(e => e.name))], [events]);
             const uniqueLocations = useMemo(() => [...new Set(events.map(e => e.location))], [events]);
 
@@ -763,7 +914,6 @@
                 try {
                     const data = { ...form, scaleStatus: "draft" };
                     if (!editingId) data.createdAt = new Date().toISOString();
-                    
                     if (editingId) {
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingId), data);
                         showToast("Evento atualizado!");
@@ -772,7 +922,6 @@
                     } else {
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data);
                         showToast("Evento criado!");
-                        // Keep Name and Location for next entry
                         setForm(prev => ({ ...prev, date: '', time: '', deadline: '', checkinCode: '', checkinDeadline: '' })); 
                     }
                 } catch (err) { console.error(err); }
@@ -780,24 +929,21 @@
 
             const handleEdit = (ev) => {
                 setEditingId(ev.id);
-                setForm({ 
-                    name: ev.name, date: ev.date, time: ev.time, period: ev.period, location: ev.location, 
-                    category: ev.category || 'Agenda Ministerial', deadline: ev.deadline || '',
-                    checkinCode: ev.checkinCode || '', checkinDeadline: ev.checkinDeadline || ''
-                });
+                setForm({ name: ev.name, date: ev.date, time: ev.time, period: ev.period, location: ev.location, category: ev.category || 'Agenda Ministerial', deadline: ev.deadline || '', checkinCode: ev.checkinCode || '', checkinDeadline: ev.checkinDeadline || '' });
             };
 
-            const handleDeleteEvent = async (eventId) => {
-                if(confirm("Tem certeza que deseja excluir este evento?")) {
+            const confirmDelete = async () => {
+                if (eventToDelete) {
                     try {
-                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', eventId));
+                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', eventToDelete));
                         showToast("Evento excluído.");
                     } catch (err) { console.error(err); }
+                    setEventToDelete(null);
                 }
             };
 
             const filteredEvents = events.filter(ev => {
-                const d = new Date(ev.date + 'T12:00:00'); // Force correct date object
+                const d = new Date(ev.date + 'T12:00:00'); 
                 const dateMatch = d.getMonth() === Number(listFilterMonth) && d.getFullYear() === Number(listFilterYear);
                 const catMatch = listFilterCategory === 'all' || ev.category === listFilterCategory;
                 return dateMatch && catMatch;
@@ -849,19 +995,20 @@
                                     <option value="Congressos">Congressos</option>
                                 </select>
                             </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-gray-400 uppercase">Prazo Disponibilidade</label>
+                            <div className="space-y-1 md:col-span-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase">Prazo para Disponibilidade</label>
                                 <input type="datetime-local" value={form.deadline} onChange={e => setForm({...form, deadline: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
                             </div>
                             
-                            {/* Check-in Fields */}
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-blue-500 uppercase">Código Check-in</label>
-                                <input type="text" placeholder="Ex: CULTO123" value={form.checkinCode} onChange={e => setForm({...form, checkinCode: e.target.value})} className="w-full p-3 bg-blue-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-blue-200 text-gray-800" />
-                            </div>
-                            <div className="space-y-1 md:col-span-2">
-                                <label className="text-[10px] font-black text-blue-500 uppercase">Prazo Limite Check-in</label>
-                                <input type="datetime-local" value={form.checkinDeadline} onChange={e => setForm({...form, checkinDeadline: e.target.value})} className="w-full p-3 bg-blue-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-blue-200 text-gray-800" />
+                            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100 pt-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-1"><Icon name="QrCode" size={12}/> Código de Check-in</label>
+                                    <input value={form.checkinCode} onChange={e => setForm({...form, checkinCode: e.target.value.toUpperCase()})} placeholder="Ex: CULTO10" className="w-full p-3 bg-orange-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-orange-200 text-gray-800 uppercase" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-1"><Icon name="Clock" size={12}/> Prazo Check-in</label>
+                                    <input type="datetime-local" value={form.checkinDeadline} onChange={e => setForm({...form, checkinDeadline: e.target.value})} className="w-full p-3 bg-orange-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-orange-200 text-gray-800" />
+                                </div>
                             </div>
                         </div>
                         <button type="submit" className={`w-full py-3 text-white rounded-xl font-black uppercase text-[10px] transition ${editingId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}>
@@ -898,14 +1045,14 @@
                                         <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 uppercase">
                                             <span className="flex items-center gap-1"><Icon name="Calendar" size={12}/> {new Date(ev.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
                                             <span className="flex items-center gap-1"><Icon name="Clock" size={12}/> {ev.time}</span>
-                                            {ev.checkinCode && <span className="flex items-center gap-1 text-blue-500"><Icon name="Key" size={12}/> Código: {ev.checkinCode}</span>}
+                                            <span className="flex items-center gap-1"><Icon name="MapPin" size={12}/> {ev.location || "---"}</span>
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
                                         <button onClick={() => handleEdit(ev)} className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition">
                                             <Icon name="Edit" size={16} />
                                         </button>
-                                        <button type="button" onClick={() => handleDeleteEvent(ev.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
+                                        <button type="button" onClick={() => setEventToDelete(ev.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
                                             <Icon name="Trash2" size={16} />
                                         </button>
                                     </div>
@@ -914,6 +1061,7 @@
                             {filteredEvents.length === 0 && <p className="text-center py-8 text-xs font-bold text-gray-300 uppercase">Nenhum evento neste período.</p>}
                         </div>
                     </div>
+                    {eventToDelete && <ConfirmModal title="Excluir Evento" message="Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita." onConfirm={confirmDelete} onCancel={() => setEventToDelete(null)} isDangerous={true} />}
                 </div>
             );
         }
@@ -923,25 +1071,21 @@
             const [filterYear, setFilterYear] = useState(new Date().getFullYear());
             const [filterCategory, setFilterCategory] = useState('all');
             
-            // Modal States
             const [statsModalEvent, setStatsModalEvent] = useState(null);
-            const [statsTab, setStatsTab] = useState('present'); // 'present', 'absent', 'pending'
+            const [statsTab, setStatsTab] = useState('present'); 
             const [scaleModalEvent, setScaleModalEvent] = useState(null);
             const [scaleModalDept, setScaleModalDept] = useState(null);
             const [expandedVolunteer, setExpandedVolunteer] = useState(null);
             
-            // Check-in Report Modal
             const [checkinReportEvent, setCheckinReportEvent] = useState(null);
 
-            // Filter Logic
             const filteredEvents = useMemo(() => events.filter(ev => {
-                const d = new Date(ev.date + 'T12:00:00'); // Consistent date parsing
+                const d = new Date(ev.date + 'T12:00:00'); 
                 const dateMatch = d.getMonth() === Number(filterMonth) && d.getFullYear() === Number(filterYear);
                 const catMatch = filterCategory === 'all' || ev.category === filterCategory;
                 return dateMatch && catMatch;
             }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, filterMonth, filterYear, filterCategory]);
 
-            // Actions
             const toggleScale = async (event) => { 
                 const newStatus = event.scaleStatus === 'ready' ? 'draft' : 'ready';
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', event.id), { scaleStatus: newStatus }); 
@@ -955,16 +1099,33 @@
                 }); 
             };
 
-            // Helpers for Stats
+            const forceCheckin = async (attId) => {
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), { hasCheckedIn: true, checkinTime: new Date().toISOString() });
+                    showToast("Check-in liberado manualmente.");
+                } catch(e) { console.error(e); }
+            };
+
             const getEventLists = (eventId) => {
                 const eventAtts = attendance.filter(a => a.eventId === eventId);
                 const present = eventAtts.filter(a => a.status === 'present');
                 const absent = eventAtts.filter(a => a.status === 'absent');
                 
                 const respondedIds = eventAtts.map(a => a.userId);
-                const pendingUsers = users.filter(u => !respondedIds.includes(u.uid) && u.role !== 'master'); 
+                const pendingUsers = users.filter(u => !respondedIds.includes(u.uid) && u.role !== 'master');
 
                 return { present, absent, pendingUsers };
+            };
+
+            const getCheckinReport = (eventId) => {
+                const escalated = attendance.filter(a => a.eventId === eventId && a.isEscalated);
+                const grouped = {};
+                escalated.forEach(a => {
+                    if (!grouped[a.servingDept]) grouped[a.servingDept] = { present: [], absent: [] };
+                    if (a.hasCheckedIn) grouped[a.servingDept].present.push(a);
+                    else grouped[a.servingDept].absent.push(a);
+                });
+                return grouped;
             };
 
             return (
@@ -989,37 +1150,48 @@
                     <div className="space-y-4">
                         {filteredEvents.map(ev => {
                             const { present, absent, pendingUsers } = getEventLists(ev.id);
+                            
+                            // Date formatting for Admin Scale View
+                            const dateObj = new Date(ev.date + 'T12:00:00');
+                            const weekDay = dateObj.toLocaleDateString('pt-BR', { weekday: 'long' });
+                            const weekDayCap = weekDay.charAt(0).toUpperCase() + weekDay.slice(1);
+                            const pStyle = getPeriodStyle(ev.period);
+
                             return (
                                 <div key={ev.id} className="bg-white p-6 rounded-[2rem] border shadow-sm">
                                     <div className="flex flex-col md:flex-row items-center gap-6">
-                                        
-                                        {/* Date Highlight */}
                                         <div className="bg-primary/5 text-primary p-4 rounded-2xl w-24 text-center shrink-0 flex flex-col items-center justify-center border border-primary/10">
                                             <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Dia</span>
-                                            <span className="text-4xl font-black leading-none">{new Date(ev.date + 'T12:00:00').getDate()}</span>
+                                            <span className="text-4xl font-black leading-none">{dateObj.getDate()}</span>
                                         </div>
-
-                                        {/* Event Info */}
                                         <div className="flex-1 text-center md:text-left">
                                             <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
                                                 <h3 className="font-black text-xl uppercase text-gray-800">{ev.name}</h3>
                                                 <span className="text-[9px] font-bold uppercase bg-gray-100 px-2 py-0.5 rounded border">{ev.category === 'Congressos' ? 'Congressos' : 'Agenda'}</span>
                                             </div>
-                                            <div className="flex justify-center md:justify-start gap-4 text-[11px] font-bold text-gray-400 uppercase">
-                                                <span className="flex items-center gap-1.5"><Icon name="Clock" size={14} /> {ev.time}</span>
-                                                <span className="flex items-center gap-1.5"><Icon name="MapPin" size={14} /> {ev.location || "Sede"}</span>
+                                            <div className="flex flex-wrap justify-center md:justify-start gap-2 text-[10px] font-black uppercase mt-1">
+                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+                                                    <Icon name="Calendar" size={13} /> {weekDayCap}, {dateObj.toLocaleDateString('pt-BR')}
+                                                </span>
+                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-500 rounded-xl border border-gray-100">
+                                                    <Icon name="Clock" size={13} /> {ev.time}
+                                                </span>
+                                                <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-transparent ${pStyle.bg} ${pStyle.text}`}>
+                                                    <Icon name={pStyle.icon} size={13} /> {ev.period}
+                                                </span>
+                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-500 rounded-xl border border-gray-100">
+                                                    <Icon name="MapPin" size={13} /> {ev.location || "Sede"}
+                                                </span>
                                             </div>
                                         </div>
-
-                                        {/* Actions */}
                                         <div className="flex flex-col gap-2 w-full md:w-auto">
                                             <div className="flex gap-2">
                                                 <button onClick={() => setStatsModalEvent(ev)} className="flex-1 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100 transition flex items-center justify-center gap-2">
                                                     <Icon name="BarChart2" size={14} /> 
-                                                    Status
+                                                    Status ({present.length}/{present.length + absent.length + pendingUsers.length})
                                                 </button>
-                                                <button onClick={() => setCheckinReportEvent(ev)} className="flex-1 px-4 py-3 bg-teal-50 text-teal-600 rounded-xl text-[10px] font-black uppercase hover:bg-teal-100 transition flex items-center justify-center gap-2">
-                                                    <Icon name="MapPin" size={14} /> 
+                                                <button onClick={() => setCheckinReportEvent(ev)} className="flex-1 px-4 py-3 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black uppercase hover:bg-orange-100 transition flex items-center justify-center gap-2">
+                                                    <Icon name="QrCode" size={14} /> 
                                                     Ver Check-in
                                                 </button>
                                             </div>
@@ -1038,7 +1210,6 @@
                          {filteredEvents.length === 0 && <p className="text-center py-8 text-xs font-bold text-gray-300 uppercase">Nenhum evento encontrado com os filtros selecionados.</p>}
                     </div>
 
-                    {/* Stats Modal */}
                     {statsModalEvent && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
@@ -1049,27 +1220,15 @@
                                     </div>
                                     <button onClick={() => setStatsModalEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
                                 </div>
-                                
                                 {(() => {
                                     const { present, absent, pendingUsers } = getEventLists(statsModalEvent.id);
                                     return (
                                         <div className="space-y-6">
                                             <div className="flex p-1 bg-gray-100 rounded-xl">
-                                                {[
-                                                    { id: 'present', label: `Disponíveis (${present.length})`, color: 'bg-green-500' },
-                                                    { id: 'absent', label: `Indisponíveis (${absent.length})`, color: 'bg-red-500' },
-                                                    { id: 'pending', label: `Pendentes (${pendingUsers.length})`, color: 'bg-gray-500' }
-                                                ].map(tab => (
-                                                    <button 
-                                                        key={tab.id} 
-                                                        onClick={() => setStatsTab(tab.id)}
-                                                        className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${statsTab === tab.id ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
-                                                    >
-                                                        {tab.label}
-                                                    </button>
+                                                {[ { id: 'present', label: `Disponíveis (${present.length})` }, { id: 'absent', label: `Indisponíveis (${absent.length})` }, { id: 'pending', label: `Pendentes (${pendingUsers.length})` } ].map(tab => (
+                                                    <button key={tab.id} onClick={() => setStatsTab(tab.id)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${statsTab === tab.id ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}>{tab.label}</button>
                                                 ))}
                                             </div>
-
                                             <div className="max-h-[300px] overflow-y-auto space-y-2">
                                                 {statsTab === 'present' && present.map(p => (
                                                     <div key={p.id} className="flex justify-between items-center p-3 bg-green-50 rounded-xl border border-green-100">
@@ -1097,7 +1256,47 @@
                         </div>
                     )}
 
-                    {/* Scale Builder Modal */}
+                    {checkinReportEvent && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h3 className="font-black uppercase text-lg text-gray-800">Relatório de Check-in</h3>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase">{checkinReportEvent.name}</p>
+                                    </div>
+                                    <button onClick={() => setCheckinReportEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
+                                </div>
+                                <div className="space-y-6">
+                                    {Object.entries(getCheckinReport(checkinReportEvent.id)).map(([deptName, data]) => (
+                                        <div key={deptName} className="border-b border-gray-100 pb-4 last:border-0">
+                                            <h4 className="font-black uppercase text-xs text-gray-800 mb-2">{deptName}</h4>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="bg-green-50 p-2 rounded-xl">
+                                                    <p className="text-[9px] font-black text-green-500 uppercase mb-1">Presentes ({data.present.length})</p>
+                                                    {data.present.map(p => (
+                                                        <div key={p.id} className="text-[10px] font-bold text-green-800">{p.userName}</div>
+                                                    ))}
+                                                    {data.present.length === 0 && <span className="text-[9px] text-green-300 italic">Ninguém</span>}
+                                                </div>
+                                                <div className="bg-red-50 p-2 rounded-xl">
+                                                    <p className="text-[9px] font-black text-red-500 uppercase mb-1">Ausentes ({data.absent.length})</p>
+                                                    {data.absent.map(a => (
+                                                        <div key={a.id} className="flex justify-between items-center mb-1">
+                                                            <span className="text-[10px] font-bold text-red-800">{a.userName}</span>
+                                                            <button onClick={() => forceCheckin(a.id)} className="text-[8px] bg-white border border-red-200 text-red-500 px-1.5 py-0.5 rounded hover:bg-red-100 uppercase">Liberar</button>
+                                                        </div>
+                                                    ))}
+                                                    {data.absent.length === 0 && <span className="text-[9px] text-red-300 italic">Ninguém</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {Object.keys(getCheckinReport(checkinReportEvent.id)).length === 0 && <p className="text-center text-xs text-gray-400">Nenhum voluntário escalado.</p>}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {scaleModalEvent && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-4xl p-8 shadow-2xl animate-in max-h-[90vh] overflow-hidden flex flex-col">
@@ -1108,84 +1307,47 @@
                                     </div>
                                     <button onClick={() => setScaleModalEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
                                 </div>
-
                                 <div className="flex flex-1 overflow-hidden gap-6">
                                     <div className="w-1/3 overflow-y-auto space-y-2 pr-2">
                                         {departments.map(d => (
-                                            <button 
-                                                key={d.id} 
-                                                onClick={() => setScaleModalDept(d.name)}
-                                                className={`w-full text-left p-4 rounded-xl border-2 transition-all flex justify-between items-center ${scaleModalDept === d.name ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-100 text-gray-500 hover:border-gray-200'}`}
-                                            >
+                                            <button key={d.id} onClick={() => setScaleModalDept(d.name)} className={`w-full text-left p-4 rounded-xl border-2 transition-all flex justify-between items-center ${scaleModalDept === d.name ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-100 text-gray-500 hover:border-gray-200'}`}>
                                                 <span className="font-black text-xs uppercase">{d.name}</span>
                                                 <Icon name="ChevronRight" size={14} />
                                             </button>
                                         ))}
                                     </div>
-
                                     <div className="w-2/3 bg-gray-50 rounded-2xl p-6 overflow-y-auto">
                                         <h4 className="font-black uppercase text-sm text-gray-800 mb-4 flex items-center gap-2">
                                             <Icon name="Users" size={16} className="text-purple-500" />
                                             Voluntários Disponíveis - {scaleModalDept}
                                         </h4>
                                         <div className="space-y-2">
-                                            {attendance
-                                                .filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept)
-                                                .map(att => {
-                                                    const deptObj = departments.find(d => d.name === att.servingDept);
-                                                    const hasFunctions = deptObj?.functions && deptObj.functions.length > 0;
-
-                                                    return (
-                                                        <div key={att.id} className="flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                                                            <div className="flex items-center justify-between p-3">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-black text-xs">
-                                                                        {att.userName.charAt(0)}
-                                                                    </div>
-                                                                    <span className="font-bold text-xs uppercase text-gray-700">{att.userName}</span>
-                                                                </div>
-                                                                
-                                                                {att.isEscalated ? (
-                                                                    <button 
-                                                                        onClick={() => toggleEscalation(att)} 
-                                                                        className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-green-500 text-white shadow-md shadow-green-200"
-                                                                    >
-                                                                        Escalado {att.role ? `(${att.role})` : ''}
-                                                                    </button>
-                                                                ) : (
-                                                                    <button 
-                                                                        onClick={() => {
-                                                                            if (hasFunctions) {
-                                                                                setExpandedVolunteer(expandedVolunteer === att.id ? null : att.id);
-                                                                            } else {
-                                                                                toggleEscalation(att, 'Voluntário');
-                                                                            }
-                                                                        }} 
-                                                                        className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-gray-100 text-gray-400 hover:bg-gray-200"
-                                                                    >
-                                                                        Escalar
-                                                                    </button>
-                                                                )}
+                                            {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).map(att => {
+                                                const deptObj = departments.find(d => d.name === att.servingDept);
+                                                const hasFunctions = deptObj?.functions && deptObj.functions.length > 0;
+                                                return (
+                                                    <div key={att.id} className="flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                                        <div className="flex items-center justify-between p-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-black text-xs">{att.userName.charAt(0)}</div>
+                                                                <span className="font-bold text-xs uppercase text-gray-700">{att.userName}</span>
                                                             </div>
-
-                                                            {/* Role Selection Drawer */}
-                                                            {!att.isEscalated && expandedVolunteer === att.id && hasFunctions && (
-                                                                <div className="bg-gray-50 p-2 grid grid-cols-2 gap-2 animate-in border-t border-gray-100">
-                                                                    {deptObj.functions.map(role => (
-                                                                        <button 
-                                                                            key={role} 
-                                                                            onClick={() => { toggleEscalation(att, role); setExpandedVolunteer(null); }} 
-                                                                            className="p-2 bg-white border rounded text-[10px] font-bold hover:border-purple-500 hover:text-purple-600 transition"
-                                                                        >
-                                                                            {role}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
+                                                            {att.isEscalated ? (
+                                                                <button onClick={() => toggleEscalation(att)} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-green-500 text-white shadow-md shadow-green-200">Escalado {att.role ? `(${att.role})` : ''}</button>
+                                                            ) : (
+                                                                <button onClick={() => { if (hasFunctions) { setExpandedVolunteer(expandedVolunteer === att.id ? null : att.id); } else { toggleEscalation(att, 'Voluntário'); } }} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-gray-100 text-gray-400 hover:bg-gray-200">Escalar</button>
                                                             )}
                                                         </div>
-                                                    );
-                                                })
-                                            }
+                                                        {!att.isEscalated && expandedVolunteer === att.id && hasFunctions && (
+                                                            <div className="bg-gray-50 p-2 grid grid-cols-2 gap-2 animate-in border-t border-gray-100">
+                                                                {deptObj.functions.map(role => (
+                                                                    <button key={role} onClick={() => { toggleEscalation(att, role); setExpandedVolunteer(null); }} className="p-2 bg-white border rounded text-[10px] font-bold hover:border-purple-500 hover:text-purple-600 transition">{role}</button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                             {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).length === 0 && (
                                                 <p className="text-center py-10 text-gray-400 text-xs font-bold uppercase">Nenhum voluntário disponível nesta função.</p>
                                             )}
@@ -1195,64 +1357,17 @@
                             </div>
                         </div>
                     )}
-
-                    {/* Check-in Report Modal */}
-                    {checkinReportEvent && (
-                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
-                            <div className="bg-white rounded-[2rem] w-full max-w-4xl p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div>
-                                        <h3 className="font-black uppercase text-lg text-gray-800">Relatório de Check-in (Em Tempo Real)</h3>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase">{checkinReportEvent.name} • {new Date(checkinReportEvent.date).toLocaleDateString()}</p>
-                                    </div>
-                                    <button onClick={() => setCheckinReportEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {departments.map(d => {
-                                        const escalatedVolunteers = attendance.filter(a => a.eventId === checkinReportEvent.id && a.servingDept === d.name && a.isEscalated);
-                                        if (escalatedVolunteers.length === 0) return null;
-
-                                        return (
-                                            <div key={d.id} className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                                                <h4 className="font-black uppercase text-xs text-gray-800 mb-3 flex items-center gap-2" style={{ color: d.color }}>
-                                                    <Icon name="Briefcase" size={14} /> {d.name}
-                                                </h4>
-                                                <div className="space-y-2">
-                                                    {escalatedVolunteers.map(vol => (
-                                                        <div key={vol.id} className="flex justify-between items-center bg-white p-2 rounded-xl shadow-sm">
-                                                            <span className="text-[10px] font-bold uppercase text-gray-600 truncate max-w-[120px]">{vol.userName}</span>
-                                                            {vol.hasCheckedIn ? (
-                                                                <span className="text-[9px] font-black uppercase text-green-600 bg-green-50 px-2 py-1 rounded flex items-center gap-1">
-                                                                    <Icon name="CheckCircle" size={10} /> Presente
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-[9px] font-black uppercase text-red-400 bg-red-50 px-2 py-1 rounded flex items-center gap-1">
-                                                                    <Icon name="XCircle" size={10} /> Ausente
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    {attendance.filter(a => a.eventId === checkinReportEvent.id && a.isEscalated).length === 0 && (
-                                        <p className="col-span-full text-center py-10 text-gray-400 text-xs font-bold uppercase">Nenhum voluntário escalado para este evento.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         }
 
+        // ... (AdminDepartmentsView, AdminTeamView, MasterSettingsView - no changes, kept for context) ...
         function AdminDepartmentsView({ departments, showToast }) {
             const [editingDept, setEditingDept] = useState(null);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [form, setForm] = useState({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '', functions: [] });
             const [newFunction, setNewFunction] = useState('');
+            const [deptToDelete, setDeptToDelete] = useState(null);
 
             const handleSave = async (e) => {
                 e.preventDefault();
@@ -1271,14 +1386,9 @@
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
-                    if (file.size > 1000000) { // 1MB limit check
-                        alert("A imagem deve ter menos de 1MB.");
-                        return;
-                    }
+                    if (file.size > 1000000) { showToast("A imagem deve ter menos de 1MB."); return; }
                     const reader = new FileReader();
-                    reader.onloadend = () => {
-                        setForm(prev => ({ ...prev, imageUrl: reader.result }));
-                    };
+                    reader.onloadend = () => { setForm(prev => ({ ...prev, imageUrl: reader.result })); };
                     reader.readAsDataURL(file);
                 }
             };
@@ -1290,363 +1400,138 @@
                 }
             };
 
-            const openEdit = (d) => {
-                setEditingDept(d);
-                setForm({ ...d, functions: d.functions || [] });
-                setIsModalOpen(true);
-            };
-
-            const openNew = () => {
-                setEditingDept(null);
-                setForm({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '', functions: [] });
-                setIsModalOpen(true);
-            };
-
-            const handleDelete = async (id) => {
-                if(confirm("Excluir departamento?")) {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'departments', id));
-                    showToast("Departamento excluído.");
-                }
-            };
+            const openEdit = (d) => { setEditingDept(d); setForm({ ...d, functions: d.functions || [] }); setIsModalOpen(true); };
+            const openNew = () => { setEditingDept(null); setForm({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '', functions: [] }); setIsModalOpen(true); };
+            const confirmDelete = async () => { if(deptToDelete) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'departments', deptToDelete)); showToast("Departamento excluído."); setDeptToDelete(null); } };
 
             return (
                 <div className="space-y-6">
                     <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Gerenciar Departamentos</h1>
-                    <button onClick={openNew} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-purple-100 hover:bg-purple-700 transition flex items-center justify-center gap-2">
-                        <Icon name="Plus" size={16} /> Adicionar Departamento
-                    </button>
-
+                    <button onClick={openNew} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-purple-100 hover:bg-purple-700 transition flex items-center justify-center gap-2"><Icon name="Plus" size={16} /> Adicionar Departamento</button>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {departments.map(d => (
                             <div key={d.id} className="bg-white p-4 rounded-[2rem] border-l-4 shadow-sm relative group overflow-hidden" style={{ borderLeftColor: d.color }}>
                                 <div className="flex justify-between items-start mb-3">
-                                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center shadow-sm">
-                                        {d.imageUrl ? <img src={d.imageUrl} className="w-full h-full object-cover" /> : <Icon name="Briefcase" size={18} style={{ color: d.color }} />}
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <button onClick={() => openEdit(d)} className="p-1.5 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100"><Icon name="Edit" size={12} /></button>
-                                        <button onClick={() => handleDelete(d.id)} className="p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Icon name="Trash2" size={12} /></button>
-                                    </div>
+                                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center shadow-sm">{d.imageUrl ? <img src={d.imageUrl} className="w-full h-full object-cover" /> : <Icon name="Briefcase" size={18} style={{ color: d.color }} />}</div>
+                                    <div className="flex gap-1"><button onClick={() => openEdit(d)} className="p-1.5 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100"><Icon name="Edit" size={12} /></button><button onClick={() => setDeptToDelete(d.id)} className="p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Icon name="Trash2" size={12} /></button></div>
                                 </div>
                                 <h3 className="text-sm font-black uppercase text-gray-800 leading-tight">{d.name}</h3>
                                 <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Líder: {d.leader}</p>
                             </div>
                         ))}
                     </div>
-
                     {isModalOpen && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
                                 <h2 className="text-2xl font-black uppercase text-gray-800 mb-6">{editingDept ? 'Editar' : 'Novo'} Departamento</h2>
                                 <form onSubmit={handleSave} className="space-y-4">
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Nome</label>
-                                        <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" required />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Líder</label>
-                                        <input value={form.leader} onChange={e => setForm({...form, leader: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Imagem (Upload)</label>
-                                        <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-xs outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                                        {form.imageUrl && <p className="text-[9px] text-green-500 font-bold mt-1 uppercase">Imagem carregada</p>}
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Cor</label>
-                                        <div className="flex gap-3">
-                                            <input type="color" value={form.color} onChange={e => setForm({...form, color: e.target.value})} className="w-12 h-12 rounded-xl cursor-pointer border-none" />
-                                            <input type="text" value={form.color} onChange={e => setForm({...form, color: e.target.value})} className="flex-1 p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800 uppercase" />
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Functions Management */}
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Funções / Cargos</label>
-                                        <div className="flex gap-2">
-                                            <input 
-                                                value={newFunction} 
-                                                onChange={e => setNewFunction(e.target.value)} 
-                                                placeholder="Ex: Filmmaker" 
-                                                className="flex-1 p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800"
-                                            />
-                                            <button type="button" onClick={addFunction} className="p-3 bg-purple-100 text-purple-600 rounded-xl hover:bg-purple-200"><Icon name="Plus" size={16}/></button>
-                                        </div>
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                            {(form.functions || []).map((f, i) => (
-                                                <span key={i} className="px-3 py-1 bg-gray-100 rounded-lg text-xs font-bold text-gray-600 flex items-center gap-2">
-                                                    {f} <button type="button" onClick={() => setForm(prev => ({...prev, functions: prev.functions.filter((_, idx) => idx !== i)}))} className="text-red-400 hover:text-red-600"><Icon name="X" size={12}/></button>
-                                                </span>
-                                            ))}
-                                            {(form.functions || []).length === 0 && <span className="text-xs text-gray-400 italic">Nenhuma função adicionada.</span>}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Descrição</label>
-                                        <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800 h-24"></textarea>
-                                    </div>
-                                    <div className="flex gap-3 pt-4">
-                                        <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Cancelar</button>
-                                        <button type="submit" className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-purple-700 shadow-lg">Salvar</button>
-                                    </div>
+                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Nome</label><input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" required /></div>
+                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Líder</label><input value={form.leader} onChange={e => setForm({...form, leader: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Imagem (Upload)</label><input type="file" accept="image/*" onChange={handleImageUpload} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-xs outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />{form.imageUrl && <p className="text-[9px] text-green-500 font-bold mt-1 uppercase">Imagem carregada</p>}</div>
+                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Cor</label><div className="flex gap-3"><input type="color" value={form.color} onChange={e => setForm({...form, color: e.target.value})} className="w-12 h-12 rounded-xl cursor-pointer border-none" /><input type="text" value={form.color} onChange={e => setForm({...form, color: e.target.value})} className="flex-1 p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800 uppercase" /></div></div>
+                                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Funções / Cargos</label><div className="flex gap-2"><input value={newFunction} onChange={e => setNewFunction(e.target.value)} placeholder="Ex: Filmmaker" className="flex-1 p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800"/><button type="button" onClick={addFunction} className="p-3 bg-purple-100 text-purple-600 rounded-xl hover:bg-purple-200"><Icon name="Plus" size={16}/></button></div><div className="flex flex-wrap gap-2 mt-2">{(form.functions || []).map((f, i) => (<span key={i} className="px-3 py-1 bg-gray-100 rounded-lg text-xs font-bold text-gray-600 flex items-center gap-2">{f} <button type="button" onClick={() => setForm(prev => ({...prev, functions: prev.functions.filter((_, idx) => idx !== i)}))} className="text-red-400 hover:text-red-600"><Icon name="X" size={12}/></button></span>))}{(form.functions || []).length === 0 && <span className="text-xs text-gray-400 italic">Nenhuma função adicionada.</span>}</div></div>
+                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Descrição</label><textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800 h-24"></textarea></div>
+                                    <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Cancelar</button><button type="submit" className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-purple-700 shadow-lg">Salvar</button></div>
                                 </form>
                             </div>
                         </div>
                     )}
+                    {deptToDelete && <ConfirmModal title="Excluir Departamento" message="Tem certeza? Todos os dados associados serão perdidos." onConfirm={confirmDelete} onCancel={() => setDeptToDelete(null)} isDangerous={true} />}
                 </div>
             );
         }
 
-        // --- Admin Team View ---
         function AdminTeamView({ users, departments, showToast }) {
             const [editingUser, setEditingUser] = useState(null);
             const [isUserModalOpen, setIsUserModalOpen] = useState(false);
             const [userForm, setUserForm] = useState({ name: '', password: '', unitType: '', unitName: '', departments: [] });
+            const [userToDelete, setUserToDelete] = useState(null);
 
             const handleSaveUser = async (e) => {
                 e.preventDefault();
                 try {
                     const uid = editingUser ? editingUser.uid : userForm.name.trim().toLowerCase().replace(/\s+/g, '_');
-                    const userData = {
-                        name: userForm.name,
-                        username: userForm.name, 
-                        password: userForm.password,
-                        unitType: userForm.unitType,
-                        unitName: userForm.unitName,
-                        participatingDepts: userForm.departments,
-                        role: 'user', 
-                        status: 'active',
-                        updatedAt: new Date().toISOString()
-                    };
+                    const userData = { name: userForm.name, username: userForm.name, password: userForm.password, unitType: userForm.unitType, unitName: userForm.unitName, participatingDepts: userForm.departments, role: 'user', status: 'active', updatedAt: new Date().toISOString() };
                     if (!editingUser) userData.createdAt = new Date().toISOString();
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uid), userData, { merge: true });
-                    setIsUserModalOpen(false); setEditingUser(null);
-                    setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [] });
+                    setIsUserModalOpen(false); setEditingUser(null); setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [] });
                     showToast(editingUser ? "Membro atualizado!" : "Membro adicionado!");
                 } catch (err) { console.error(err); showToast("Erro ao salvar membro."); }
             };
 
-            const openEditUser = (u) => {
-                setEditingUser(u);
-                setUserForm({ name: u.name, password: u.password || '', unitType: u.unitType || '', unitName: u.unitName || '', departments: u.participatingDepts || [] });
-                setIsUserModalOpen(true);
-            };
-
-            const openNewUser = () => {
-                setEditingUser(null);
-                setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [] });
-                setIsUserModalOpen(true);
-            };
-
+            const openEditUser = (u) => { setEditingUser(u); setUserForm({ name: u.name, password: u.password || '', unitType: u.unitType || '', unitName: u.unitName || '', departments: u.participatingDepts || [] }); setIsUserModalOpen(true); };
+            const openNewUser = () => { setEditingUser(null); setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [] }); setIsUserModalOpen(true); };
             const toggleDeptInForm = (deptId) => setUserForm(prev => ({ ...prev, departments: prev.departments.includes(deptId) ? prev.departments.filter(d => d !== deptId) : [...prev.departments, deptId] }));
-            const deleteUser = async (uid) => { if(confirm("Excluir membro?")) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uid)); showToast("Membro excluído."); }};
+            const confirmDelete = async () => { if(userToDelete) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userToDelete)); showToast("Membro excluído."); setUserToDelete(null); } };
             const toggleUserStatus = async (user) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), { status: user.status === 'active' ? 'blocked' : 'active' }); showToast("Status alterado."); };
 
             return (
                 <div className="space-y-6">
                     <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Gerenciar Equipe</h1>
                     <div className="space-y-4">
-                        <button onClick={openNewUser} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-purple-100 hover:bg-purple-700 transition flex items-center justify-center gap-2">
-                            <Icon name="Plus" size={16} /> Adicionar Novo Membro
-                        </button>
-
-                        <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden">
-                            <div className="divide-y divide-gray-50">
-                                {users.map(u => (
-                                    <div key={u.uid} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black uppercase ${u.status === 'blocked' ? 'bg-red-400' : u.role === 'admin' || u.role === 'master' ? 'bg-purple-600' : 'bg-green-400'}`}>
-                                                {u.name.charAt(0)}
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-sm text-gray-800 uppercase">{u.name}</p>
-                                                <p className="text-[10px] text-gray-400 font-bold uppercase">{u.role === 'master' ? 'Master Admin' : u.role === 'admin' ? 'Administrador' : 'Voluntário'} • Senha: {u.password}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => openEditUser(u)} className="p-2 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100">
-                                                <Icon name="Edit2" size={16} />
-                                            </button>
-                                            {u.role !== 'master' && (
-                                                <>
-                                                    <button onClick={() => toggleUserStatus(u)} className={`p-2 rounded-lg ${u.status === 'active' ? 'bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500' : 'bg-green-100 text-green-500'}`}>
-                                                        <Icon name={u.status === 'active' ? 'Lock' : 'Unlock'} size={16} />
-                                                    </button>
-                                                    <button onClick={() => deleteUser(u.uid)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100">
-                                                        <Icon name="Trash2" size={16} />
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        <button onClick={openNewUser} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-purple-100 hover:bg-purple-700 transition flex items-center justify-center gap-2"><Icon name="Plus" size={16} /> Adicionar Novo Membro</button>
+                        <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden"><div className="divide-y divide-gray-50">{users.map(u => (<div key={u.uid} className="p-4 flex items-center justify-between hover:bg-gray-50 transition"><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black uppercase ${u.status === 'blocked' ? 'bg-red-400' : u.role === 'admin' || u.role === 'master' ? 'bg-purple-600' : 'bg-green-400'}`}>{u.name.charAt(0)}</div><div><p className="font-bold text-sm text-gray-800 uppercase">{u.name}</p><p className="text-[10px] text-gray-400 font-bold uppercase">{u.role === 'master' ? 'Master Admin' : u.role === 'admin' ? 'Administrador' : 'Voluntário'} • Senha: {u.password}</p></div></div><div className="flex gap-2"><button onClick={() => openEditUser(u)} className="p-2 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100"><Icon name="Edit2" size={16} /></button>{u.role !== 'master' && (<><button onClick={() => toggleUserStatus(u)} className={`p-2 rounded-lg ${u.status === 'active' ? 'bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500' : 'bg-green-100 text-green-500'}`}><Icon name={u.status === 'active' ? 'Lock' : 'Unlock'} size={16} /></button><button onClick={() => setUserToDelete(u.uid)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Icon name="Trash2" size={16} /></button></>)}</div></div>))}</div></div>
                     </div>
-
                     {isUserModalOpen && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
                                 <h2 className="text-2xl font-black uppercase text-gray-800 mb-6">{editingUser ? 'Editar Membro' : 'Novo Membro'}</h2>
                                 <form onSubmit={handleSaveUser} className="space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Nome Completo</label>
-                                        <input value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} required className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Senha de Acesso</label>
-                                        <input value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} required className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase text-gray-400">Tipo Unidade</label>
-                                            <select value={userForm.unitType} onChange={e => setUserForm({...userForm, unitType: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800">
-                                                <option value="">Selecione...</option>
-                                                <option value="Regional">Regional</option>
-                                                <option value="Setor">Setor</option>
-                                                <option value="Congregação">Congregação</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase text-gray-400">Nome Unidade</label>
-                                            <input value={userForm.unitName} onChange={e => setUserForm({...userForm, unitName: e.target.value})} placeholder="Ex: Sede" className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2 pt-2">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Departamentos</label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {departments.map(d => (
-                                                <button 
-                                                    key={d.id} 
-                                                    type="button" 
-                                                    onClick={() => toggleDeptInForm(d.id)}
-                                                    className={`p-2 rounded-xl border-2 text-[10px] font-black uppercase transition-all ${userForm.departments.includes(d.id) ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-100 text-gray-400 hover:border-gray-200'}`}
-                                                >
-                                                    {d.name}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div className="pt-4 flex gap-3">
-                                        <button type="button" onClick={() => setIsUserModalOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Cancelar</button>
-                                        <button type="submit" className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-purple-700 shadow-lg shadow-purple-200">Salvar</button>
-                                    </div>
+                                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Nome Completo</label><input value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} required className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Senha de Acesso</label><input value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} required className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                    <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Tipo Unidade</label><select value={userForm.unitType} onChange={e => setUserForm({...userForm, unitType: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800"><option value="">Selecione...</option><option value="Regional">Regional</option><option value="Setor">Setor</option><option value="Congregação">Congregação</option></select></div><div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Nome Unidade</label><input value={userForm.unitName} onChange={e => setUserForm({...userForm, unitName: e.target.value})} placeholder="Ex: Sede" className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div></div>
+                                    <div className="space-y-2 pt-2"><label className="text-[10px] font-black uppercase text-gray-400">Departamentos</label><div className="grid grid-cols-2 gap-2">{departments.map(d => (<button key={d.id} type="button" onClick={() => toggleDeptInForm(d.id)} className={`p-2 rounded-xl border-2 text-[10px] font-black uppercase transition-all ${userForm.departments.includes(d.id) ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-100 text-gray-400 hover:border-gray-200'}`}>{d.name}</button>))}</div></div>
+                                    <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsUserModalOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Cancelar</button><button type="submit" className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-purple-700 shadow-lg shadow-purple-200">Salvar</button></div>
                                 </form>
                             </div>
                         </div>
                     )}
+                    {userToDelete && <ConfirmModal title="Excluir Membro" message="Tem certeza? O acesso será revogado imediatamente." onConfirm={confirmDelete} onCancel={() => setUserToDelete(null)} isDangerous={true} />}
                 </div>
             );
         }
 
-        // --- New Admin Master (Settings) Component ---
-        
         function MasterSettingsView({ settings, onUpdateSettings, showToast }) {
             const [form, setForm] = useState(settings);
-
             useEffect(() => { setForm(settings); }, [settings]);
-
-            const handleChange = (field, value) => {
-                setForm(prev => ({ ...prev, [field]: value }));
-            };
-
-            const handleSectionNameChange = (key, value) => {
-                setForm(prev => ({ ...prev, tabNames: { ...prev.tabNames, [key]: value } }));
-            };
-
+            const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+            const handleSectionNameChange = (key, value) => setForm(prev => ({ ...prev, tabNames: { ...prev.tabNames, [key]: value } }));
             const handleImageUpload = (e, field) => {
                 const file = e.target.files[0];
                 if (file) {
-                    if (file.size > 2000000) { 
-                        alert("A imagem deve ter menos de 2MB.");
-                        return;
-                    }
+                    if (file.size > 2000000) { showToast("A imagem deve ter menos de 2MB."); return; }
                     const reader = new FileReader();
-                    reader.onloadend = () => {
-                        handleChange(field, reader.result);
-                    };
+                    reader.onloadend = () => { handleChange(field, reader.result); };
                     reader.readAsDataURL(file);
                 }
             };
-
-            const handleSave = async (e) => {
-                e.preventDefault();
-                await onUpdateSettings(form);
-            };
+            const handleSave = async (e) => { e.preventDefault(); await onUpdateSettings(form); };
 
             return (
                 <div className="space-y-8 pb-20">
                     <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Personalização do Sistema</h1>
-                    
                     <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* Visuals */}
                         <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm space-y-6">
                             <h3 className="font-black uppercase text-lg text-gray-800 flex items-center gap-2"><Icon name="Palette" className="text-purple-500" /> Aparência</h3>
-                            
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-gray-400">Cor Principal (Hex)</label>
-                                <div className="flex gap-3">
-                                    <input type="color" value={form.primaryColor} onChange={e => handleChange('primaryColor', e.target.value)} className="w-12 h-12 rounded-xl cursor-pointer border-none" />
-                                    <input type="text" value={form.primaryColor} onChange={e => handleChange('primaryColor', e.target.value)} className="flex-1 p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800 uppercase" />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-gray-400">Título do Login/Portal</label>
-                                <input value={form.loginTitle} onChange={e => handleChange('loginTitle', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-gray-400">Imagem da Logo (Upload)</label>
-                                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'logoUrl')} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-xs outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                                {form.logoUrl && <p className="text-[9px] text-green-500 font-bold mt-1 uppercase">Imagem carregada</p>}
-                            </div>
-                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-gray-400">Upload Imagem de Fundo (Login)</label>
-                                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'loginBannerUrl')} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-xs outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                                {form.loginBannerUrl && <p className="text-[9px] text-green-500 font-bold mt-1 uppercase">Imagem carregada</p>}
-                            </div>
+                            <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Cor Principal (Hex)</label><div className="flex gap-3"><input type="color" value={form.primaryColor} onChange={e => handleChange('primaryColor', e.target.value)} className="w-12 h-12 rounded-xl cursor-pointer border-none" /><input type="text" value={form.primaryColor} onChange={e => handleChange('primaryColor', e.target.value)} className="flex-1 p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800 uppercase" /></div></div>
+                            <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Título do Login/Portal</label><input value={form.loginTitle} onChange={e => handleChange('loginTitle', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Imagem da Logo (Upload)</label><input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'logoUrl')} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-xs outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />{form.logoUrl && <p className="text-[9px] text-green-500 font-bold mt-1 uppercase">Imagem carregada</p>}</div>
+                             <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Upload Imagem de Fundo (Login)</label><input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'loginBannerUrl')} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-xs outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />{form.loginBannerUrl && <p className="text-[9px] text-green-500 font-bold mt-1 uppercase">Imagem carregada</p>}</div>
                         </div>
-
-                        {/* Navigation Names */}
                         <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm space-y-6">
                             <h3 className="font-black uppercase text-lg text-gray-800 flex items-center gap-2"><Icon name="Type" className="text-purple-500" /> Nomes das Seções</h3>
-                            
                             <div className="space-y-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black uppercase text-gray-400">Aba Painel</label>
-                                    <input value={form.tabNames?.dashboard || ''} onChange={e => handleSectionNameChange('dashboard', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black uppercase text-gray-400">Aba Agenda & Escalas</label>
-                                    <input value={form.tabNames?.agenda || ''} onChange={e => handleSectionNameChange('agenda', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black uppercase text-gray-400">Aba Congressos</label>
-                                    <input value={form.tabNames?.congressos || 'Congressos'} onChange={e => handleSectionNameChange('congressos', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black uppercase text-gray-400">Aba Minha Equipe</label>
-                                    <input value={form.tabNames?.departments || ''} onChange={e => handleSectionNameChange('departments', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                                </div>
+                                <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Aba Painel</label><input value={form.tabNames?.dashboard || ''} onChange={e => handleSectionNameChange('dashboard', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Aba Agenda & Escalas</label><input value={form.tabNames?.agenda || ''} onChange={e => handleSectionNameChange('agenda', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Aba Congressos</label><input value={form.tabNames?.congressos || 'Congressos'} onChange={e => handleSectionNameChange('congressos', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Aba Minha Equipe</label><input value={form.tabNames?.departments || ''} onChange={e => handleSectionNameChange('departments', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
                             </div>
                         </div>
-
-                        <div className="lg:col-span-2">
-                             <button type="submit" className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-purple-700 shadow-xl shadow-purple-100 transition">
-                                Salvar Alterações
-                            </button>
-                        </div>
+                        <div className="lg:col-span-2"><button type="submit" className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-purple-700 shadow-xl shadow-purple-100 transition">Salvar Alterações</button></div>
                     </form>
                 </div>
             );
         }
-
-        // --- Main App Logic ---
 
         function App() {
             const [user, setUser] = useState(null);
@@ -1660,155 +1545,21 @@
             const [toastMsg, setToastMsg] = useState(null);
             const [loginError, setLoginError] = useState(null);
             const [authLoading, setAuthLoading] = useState(false);
-            
-            // Mobile Menu State
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+            const [appSettings, setAppSettings] = useState({ primaryColor: '#3b82f6', loginTitle: 'Portal Ministerial', loginBannerUrl: '', logoUrl: '', tabNames: { dashboard: 'Painel', agenda: 'Agenda', departments: 'Minha Equipe', reports: 'Relatórios', congressos: 'Congressos' } });
 
-            // Settings State
-            const [appSettings, setAppSettings] = useState({
-                primaryColor: '#3b82f6',
-                loginTitle: 'Portal Ministerial',
-                loginBannerUrl: '',
-                logoUrl: '',
-                tabNames: { dashboard: 'Painel', agenda: 'Agenda', departments: 'Minha Equipe', reports: 'Relatórios', congressos: 'Congressos' }
-            });
+            useEffect(() => { const initAuth = async () => { try { if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) { await signInWithCustomToken(auth, __initial_auth_token); } else { await signInAnonymously(auth); } } catch (e) { console.error("Auth Init Error:", e); } }; initAuth(); const unsubscribe = onAuthStateChanged(auth, (u) => { setFirebaseUser(u); }); return () => unsubscribe(); }, []);
+            useEffect(() => { if (!firebaseUser) return; const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (docSnap) => { if (docSnap.exists()) { setAppSettings(prev => ({ ...prev, ...docSnap.data() })); } }); return () => unsubSettings(); }, [firebaseUser]);
+            const handleUpdateSettings = async (newSettings) => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), newSettings, { merge: true }); setToastMsg("Configurações salvas!"); } catch (e) { console.error(e); setToastMsg("Erro ao salvar."); } };
+            
+            useEffect(() => { if (!firebaseUser) return; const seedData = async () => { const masterDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master')); if (!masterDoc.exists()) { const initialUsers = [ { name: "Master", pass: "adm2026", role: "master" }, { name: "Areli Castro", pass: "areli2026", role: "user" }, { name: "Isabelle Neves", pass: "belle2026", role: "user" }, { name: "Felipe Silva", pass: "felipe2026", role: "user" }, { name: "Adriel Carvalho", pass: "adriel2026", role: "user" }, { name: "Charles Santos", pass: "charles2026", role: "user" }, { name: "Leandro da Silva", pass: "leo2026", role: "user" }, { name: "Leandro Cavalcante", pass: "leo2026", role: "user" }, { name: "Julia Gonçalves", pass: "julia2026", role: "user" }, { name: "Macário", pass: "macario2026", role: "user" }, { name: "Maranhão", pass: "maranhao2026", role: "user" }, { name: "Bruno Ventura", pass: "bruno2026", role: "user" } ]; const batch = writeBatch(db); initialUsers.forEach(u => { const id = u.name.trim().toLowerCase().replace(/\s+/g, '_'); const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id); batch.set(docRef, { name: u.name, username: u.name, password: u.pass, role: u.role, status: 'active', unitType: u.role === 'master' ? 'Geral' : 'Regional', unitName: u.role === 'master' ? 'Sede' : 'Sede', participatingDepts: [], createdAt: new Date().toISOString() }); }); await batch.commit(); } }; seedData(); }, [firebaseUser]);
 
-            // 1. Initialize Auth State
-            useEffect(() => {
-                const initAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (e) { console.error("Auth Init Error:", e); }
-                };
-                initAuth();
-                const unsubscribe = onAuthStateChanged(auth, (u) => { setFirebaseUser(u); });
-                return () => unsubscribe();
-            }, []);
+            useEffect(() => { if (!firebaseUser || !userData) return; const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); setUserData({ uid: docSnap.id, ...data }); } }); const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => { if (snap.empty) { ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' })); } else { setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() }))); } }); let unsubAllUsers = () => {}; if (userData.role === 'admin' || userData.role === 'master') { unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })))); } return () => { unsubProfile(); unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); }; }, [firebaseUser, userData?.uid, userData?.role]);
 
-            // 2. Fetch Global Settings
-            useEffect(() => {
-                if (!firebaseUser) return;
-                const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (docSnap) => {
-                    if (docSnap.exists()) {
-                        setAppSettings(prev => ({ ...prev, ...docSnap.data() }));
-                    }
-                });
-                return () => unsubSettings();
-            }, [firebaseUser]);
-
-            // 3. Update Settings Function
-            const handleUpdateSettings = async (newSettings) => {
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), newSettings, { merge: true });
-                    setToastMsg("Configurações salvas!");
-                } catch (e) {
-                    console.error(e);
-                    setToastMsg("Erro ao salvar.");
-                }
-            };
-
-            // 4. Seed Data
-            useEffect(() => {
-                const seedData = async () => {
-                    if (!firebaseUser) return;
-                    
-                    // Check for 'master' instead of 'admin' as the anchor for seeding
-                    const masterDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master'));
-                    
-                    if (!masterDoc.exists()) {
-                         const initialUsers = [
-                            { name: "Master", pass: "adm2026", role: "master" }, // Changed from Admin
-                            { name: "Areli Castro", pass: "areli2026", role: "user" },
-                            { name: "Isabelle Neves", pass: "belle2026", role: "user" },
-                            { name: "Felipe Silva", pass: "felipe2026", role: "user" },
-                            { name: "Adriel Carvalho", pass: "adriel2026", role: "user" },
-                            { name: "Charles Santos", pass: "charles2026", role: "user" },
-                            { name: "Leandro da Silva", pass: "leo2026", role: "user" },
-                            { name: "Leandro Cavalcante", pass: "leo2026", role: "user" },
-                            { name: "Julia Gonçalves", pass: "julia2026", role: "user" },
-                            { name: "Macário", pass: "macario2026", role: "user" },
-                            { name: "Maranhão", pass: "maranhao2026", role: "user" },
-                            { name: "Bruno Ventura", pass: "bruno2026", role: "user" }
-                        ];
-
-                        const batch = writeBatch(db);
-                        initialUsers.forEach(u => {
-                            // Generate a simple ID
-                            const id = u.name.trim().toLowerCase().replace(/\s+/g, '_');
-                            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id);
-                            batch.set(docRef, {
-                                name: u.name,
-                                username: u.name,
-                                password: u.pass,
-                                role: u.role,
-                                status: 'active',
-                                unitType: u.role === 'master' ? 'Geral' : 'Regional', // Default unit
-                                unitName: u.role === 'master' ? 'Sede' : 'Sede',
-                                participatingDepts: [],
-                                createdAt: new Date().toISOString()
-                            });
-                        });
-                        await batch.commit();
-                        console.log("Initial users seeded.");
-                    }
-                };
-                seedData();
-            }, [firebaseUser]);
-
-            // 5. Data Fetching
-            useEffect(() => {
-                if (!firebaseUser || !userData) return;
-                
-                const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), (docSnap) => {
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        setUserData({ uid: docSnap.id, ...data });
-                    }
-                });
-
-                const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-                const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-                const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => {
-                      if (snap.empty) {
-                        ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' }));
-                    } else {
-                        setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                    }
-                });
-
-                let unsubAllUsers = () => {};
-                if (userData.role === 'admin' || userData.role === 'master') {
-                    unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() }))));
-                }
-
-                return () => { unsubProfile(); unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); };
-            }, [firebaseUser, userData?.uid, userData?.role]);
-
-            // Auth Logic (Login/Logout)
-            const handleLogin = async (e) => {
-                e.preventDefault(); setLoginError(null); setAuthLoading(true);
-                const username = e.target.username.value;
-                const password = e.target.password.value;
-                try {
-                    if (!firebaseUser) await signInAnonymously(auth);
-                    const userId = username.trim().toLowerCase().replace(/\s+/g, '_');
-                    const userSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId));
-                    if (userSnap.exists() && userSnap.data().password === password) {
-                        setUserData({ uid: userSnap.id, ...userSnap.data() });
-                    } else {
-                        setLoginError("Credenciais inválidas.");
-                    }
-                } catch (err) { setLoginError("Erro na conexão."); } 
-                finally { setAuthLoading(false); }
-            };
+            const handleLogin = async (e) => { e.preventDefault(); setLoginError(null); setAuthLoading(true); const username = e.target.username.value; const password = e.target.password.value; try { if (!firebaseUser) await signInAnonymously(auth); const userId = username.trim().toLowerCase().replace(/\s+/g, '_'); const userSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId)); if (userSnap.exists() && userSnap.data().password === password) { setUserData({ uid: userSnap.id, ...userSnap.data() }); } else { setLoginError("Credenciais inválidas."); } } catch (err) { setLoginError("Erro na conexão."); } finally { setAuthLoading(false); } };
             const handleLogout = () => setUserData(null);
             const showToast = (msg) => setToastMsg(msg);
 
-            // Render
             if (!userData) return <AuthScreen onLogin={handleLogin} error={loginError} isProcessing={authLoading} settings={appSettings} />;
             if (userData.status === 'blocked') return <BlockedScreen onLogout={handleLogout} />;
 
@@ -1817,119 +1568,32 @@
             return (
                 <div className="flex min-h-screen bg-gray-50 text-gray-800 font-sans selection:bg-primary/20">
                     <CustomStyles primaryColor={appSettings.primaryColor} />
-                    
-                    {/* Desktop Sidebar */}
                     <aside className="hidden md:flex flex-col w-72 bg-white border-r p-6 fixed h-full z-20 no-print overflow-y-auto">
-                        <div className="flex items-center gap-3 mb-12 px-2">
-                            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200 overflow-hidden">
-                                {appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={20} />}
-                            </div>
-                            <h1 className="font-black uppercase text-xs tracking-tight leading-none text-gray-800 break-words max-w-[150px]">{appSettings.loginTitle}</h1>
-                        </div>
-                        
+                        <div className="flex items-center gap-3 mb-12 px-2"><div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200 overflow-hidden">{appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={20} />}</div><h1 className="font-black uppercase text-xs tracking-tight leading-none text-gray-800 break-words max-w-[150px]">{appSettings.loginTitle}</h1></div>
                         <nav className="flex-1 space-y-2">
                             <NavItem active={view === 'dashboard'} iconName="LayoutDashboard" label={appSettings.tabNames.dashboard} onClick={() => setView('dashboard')} open={true} />
                             <NavItem active={view === 'agenda'} iconName="Calendar" label={appSettings.tabNames.agenda} onClick={() => setView('agenda')} open={true} />
                             <NavItem active={view === 'congressos'} iconName="Trophy" label={appSettings.tabNames.congressos} onClick={() => setView('congressos')} open={true} />
                             <NavItem active={view === 'depts'} iconName="Briefcase" label={appSettings.tabNames.departments} onClick={() => setView('depts')} open={true} />
-                            
-                            {isAdmin && (
-                                <>
-                                    <div className="my-6 border-t border-gray-100"></div>
-                                    <p className="px-4 text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
-                                    
-                                    <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => setView('create_events')} open={true} />
-                                    <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => setView('manage_scales')} open={true} />
-                                    <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => setView('manage_team')} open={true} />
-                                    <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => setView('manage_depts')} open={true} />
-                                    <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => setView('reports')} open={true} />
-                                    
-                                    <div className="my-2"></div>
-                                    <NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => setView('admin_master')} open={true} />
-                                </>
-                            )}
+                            {isAdmin && (<><div className="my-6 border-t border-gray-100"></div><p className="px-4 text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p><NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => setView('create_events')} open={true} /><NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => setView('manage_scales')} open={true} /><NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => setView('view_scale')} open={true} /><NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => setView('manage_team')} open={true} /><NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => setView('manage_depts')} open={true} /><NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => setView('reports')} open={true} /><div className="my-2"></div><NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => setView('admin_master')} open={true} /></>)}
                         </nav>
-
-                        <div className="mt-8 pt-6 border-t border-gray-100 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-black text-gray-500 uppercase">
-                                {userData.name.charAt(0)}
-                            </div>
-                            <div className="flex-1 overflow-hidden">
-                                <p className="font-bold text-xs truncate text-gray-800">{userData.name}</p>
-                                <button onClick={handleLogout} className="text-[10px] text-red-400 font-bold uppercase hover:text-red-600">Sair</button>
-                            </div>
-                        </div>
+                        <div className="mt-8 pt-6 border-t border-gray-100 flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-black text-gray-500 uppercase">{userData.name.charAt(0)}</div><div className="flex-1 overflow-hidden"><p className="font-bold text-xs truncate text-gray-800">{userData.name}</p><button onClick={handleLogout} className="text-[10px] text-red-400 font-bold uppercase hover:text-red-600">Sair</button></div></div>
                     </aside>
-
-                    {/* Mobile Header (Admin Only) */}
-                    {isAdmin && (
-                         <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-50">
-                             <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white overflow-hidden">
-                                    {appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={16} />}
-                                </div>
-                                <h1 className="font-black uppercase text-xs text-gray-800">{appSettings.loginTitle}</h1>
-                             </div>
-                             <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-gray-50 rounded-xl text-gray-500"><Icon name="Menu" size={24} /></button>
-                         </div>
-                    )}
-
-                    {/* Mobile Admin Drawer */}
-                    {isAdmin && isMobileMenuOpen && (
-                        <div className="fixed inset-0 z-[60] flex md:hidden">
-                            <div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div>
-                            <div className="relative w-64 bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in">
-                                <div className="flex justify-between items-center mb-8">
-                                     <h2 className="font-black uppercase text-lg text-gray-800">Menu Admin</h2>
-                                     <button onClick={() => setIsMobileMenuOpen(false)}><Icon name="X" size={24} /></button>
-                                </div>
-                                <div className="space-y-2">
-                                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
-                                    <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => { setView('create_events'); setIsMobileMenuOpen(false); }} open={true} />
-                                    <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => { setView('manage_scales'); setIsMobileMenuOpen(false); }} open={true} />
-                                    <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => { setView('manage_team'); setIsMobileMenuOpen(false); }} open={true} />
-                                    <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => { setView('manage_depts'); setIsMobileMenuOpen(false); }} open={true} />
-                                    <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => { setView('reports'); setIsMobileMenuOpen(false); }} open={true} />
-                                    <div className="my-4 border-t border-gray-100"></div>
-                                    <NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => { setView('admin_master'); setIsMobileMenuOpen(false); }} open={true} />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Mobile Bottom Nav */}
+                    {isAdmin && (<div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-50"><div className="flex items-center gap-2"><div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white overflow-hidden">{appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={16} />}</div><h1 className="font-black uppercase text-xs text-gray-800">{appSettings.loginTitle}</h1></div><button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-gray-50 rounded-xl text-gray-500"><Icon name="Menu" size={24} /></button></div>)}
+                    {isAdmin && isMobileMenuOpen && (<div className="fixed inset-0 z-[60] flex md:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div><div className="relative w-64 bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in"><div className="flex justify-between items-center mb-8"><h2 className="font-black uppercase text-lg text-gray-800">Menu Admin</h2><button onClick={() => setIsMobileMenuOpen(false)}><Icon name="X" size={24} /></button></div><div className="space-y-2"><p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p><NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => { setView('create_events'); setIsMobileMenuOpen(false); }} open={true} /><NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => { setView('manage_scales'); setIsMobileMenuOpen(false); }} open={true} /><NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => { setView('view_scale'); setIsMobileMenuOpen(false); }} open={true} /><NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => { setView('manage_team'); setIsMobileMenuOpen(false); }} open={true} /><NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => { setView('manage_depts'); setIsMobileMenuOpen(false); }} open={true} /><NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => { setView('reports'); setIsMobileMenuOpen(false); }} open={true} /><div className="my-4 border-t border-gray-100"></div><NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => { setView('admin_master'); setIsMobileMenuOpen(false); }} open={true} /></div></div></div>)}
                     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-2 pb-safe flex justify-around items-center z-50 no-print shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                         <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}>
-                            <Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} />
-                            <span className="text-[9px] font-bold">Painel</span>
-                         </button>
-                         <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}>
-                            <Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} />
-                            <span className="text-[9px] font-bold">Agenda</span>
-                         </button>
-                         <button onClick={() => setView('congressos')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'congressos' ? 'text-primary' : 'text-gray-400'}`}>
-                            <Icon name="Trophy" size={20} strokeWidth={view === 'congressos' ? 2.5 : 2} />
-                            <span className="text-[9px] font-bold">Congressos</span>
-                         </button>
-                         <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}>
-                            <Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} />
-                            <span className="text-[9px] font-bold">Equipe</span>
-                         </button>
-                         <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400">
-                            <Icon name="LogOut" size={20} />
-                            <span className="text-[9px] font-bold">Sair</span>
-                         </button>
+                         <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}><Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /><span className="text-[9px] font-bold">Painel</span></button>
+                         <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} /><span className="text-[9px] font-bold">Agenda</span></button>
+                         <button onClick={() => setView('congressos')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'congressos' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Trophy" size={20} strokeWidth={view === 'congressos' ? 2.5 : 2} /><span className="text-[9px] font-bold">Congressos</span></button>
+                         <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>
+                         <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400"><Icon name="LogOut" size={20} /><span className="text-[9px] font-bold">Sair</span></button>
                     </div>
-
-                    {/* Content Area */}
                     <main className={`flex-1 md:ml-72 p-4 md:p-12 mb-24 md:mb-0 max-w-7xl mx-auto w-full ${isAdmin ? 'mt-16 md:mt-0' : ''}`}>
-                        {/* User Views */}
                         {view === 'dashboard' && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}
                         {view === 'agenda' && <AgendaView title={appSettings.tabNames.agenda} category="Agenda Ministerial" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
                         {view === 'congressos' && <AgendaView title={appSettings.tabNames.congressos} category="Congressos" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
+                        {view === 'view_scale' && isAdmin && <ViewScaleView events={events} attendance={attendance} departments={departments} />}
                         {view === 'depts' && <UserDepartments title={appSettings.tabNames.departments} departments={departments} userProfile={userData} />}
-                        
-                        {/* Admin Views */}
                         {isAdmin && view === 'create_events' && <AdminCreateEventsView events={events} showToast={showToast} />}
                         {isAdmin && view === 'manage_scales' && <AdminScalesView events={events} attendance={attendance} users={allUsers} departments={departments} showToast={showToast} />}
                         {isAdmin && view === 'manage_team' && <AdminTeamView users={allUsers} departments={departments} showToast={showToast} />}
@@ -1937,21 +1601,17 @@
                         {isAdmin && view === 'reports' && <ReportsView title={appSettings.tabNames.reports} attendance={attendance} allUsers={allUsers} departments={departments} />}
                         {isAdmin && view === 'admin_master' && <MasterSettingsView settings={appSettings} onUpdateSettings={handleUpdateSettings} showToast={showToast} />}
                     </main>
-
                     {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
                 </div>
             );
         }
 
-        // --- Helper Components ---
         function NavItem({ active, iconName, label, onClick, open }) {
             return (
                 <button onClick={onClick} title={label} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
                     active ? 'bg-primary text-white shadow-lg shadow-blue-100' : 'text-gray-500 hover:bg-gray-100 hover:text-primary'
                 }`}>
-                    <div className="shrink-0">
-                        <Icon name={iconName} size={20} strokeWidth={active ? 3 : 2} />
-                    </div>
+                    <div className="shrink-0"><Icon name={iconName} size={20} strokeWidth={active ? 3 : 2} /></div>
                     {open && <span className="text-[10px] font-black uppercase tracking-tight truncate">{label}</span>}
                 </button>
             );

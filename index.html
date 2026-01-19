@@ -257,10 +257,7 @@
                 available: filteredAtt.filter(a => a.status === 'present').length,
                 unavailable: filteredAtt.filter(a => a.status === 'absent').length,
                 escalated: filteredAtt.filter(a => a.isEscalated).length,
-                pending: events.filter(e => {
-                    const d = new Date(e.date);
-                    return d.getUTCMonth() === Number(month) && d.getUTCFullYear() === Number(year) && new Date() <= new Date(e.date);
-                }).length // Rough estimate for pending
+                checkins: filteredAtt.filter(a => a.hasCheckedIn).length,
             };
 
             return (
@@ -268,9 +265,9 @@
                     <FilterHeader title={`Olá, ${userProfile.name?.split(' ')[0]}`} month={month} setMonth={setMonth} year={year} setYear={setYear} />
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                         <StatCard title="Disponível" value={stats.available} iconName="CheckCircle" iconColor="text-green-500" />
-                        <StatCard title="Indisponível" value={stats.unavailable} iconName="XCircle" iconColor="text-red-500" />
                         <StatCard title="Escalado" value={stats.escalated} iconName="ClipboardCheck" iconColor="text-purple-500" />
-                        <StatCard title="Eventos Futuros" value={stats.pending} iconName="Clock" iconColor="text-blue-500" />
+                        <StatCard title="Check-ins Realizados" value={stats.checkins} iconName="MapPin" iconColor="text-blue-500" />
+                        <StatCard title="Indisponível" value={stats.unavailable} iconName="XCircle" iconColor="text-red-500" />
                     </div>
                     <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border shadow-sm">
                         <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-gray-800"><Icon name="FileText" className="text-primary" /> Histórico</h2>
@@ -281,8 +278,8 @@
                                         <p className="font-bold uppercase text-[10px] md:text-xs text-gray-800">{a.eventName}</p>
                                         <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tight">{a.servingDept} • {new Date(a.eventDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
                                     </div>
-                                    <span className={`px-2 py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase ${a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                                        {a.status === 'present' ? "Disponível" : "Ausente"}
+                                    <span className={`px-2 py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase ${a.hasCheckedIn ? 'bg-blue-100 text-blue-600' : a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                        {a.hasCheckedIn ? "Check-in OK" : a.status === 'present' ? "Disponível" : "Ausente"}
                                     </span>
                                 </div>
                             ))}
@@ -299,13 +296,16 @@
             const [dayFilter, setDayFilter] = useState('all'); 
             const [expandedEvent, setExpandedEvent] = useState(null);
             const [showEscalatedOnly, setShowEscalatedOnly] = useState(false);
+            
+            // Check-in States
+            const [checkinModalEvent, setCheckinModalEvent] = useState(null);
+            const [checkinCodeInput, setCheckinCodeInput] = useState("");
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date);
                 
                 if (showEscalatedOnly) {
                     const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
-                    // NEW: Filter by selected Month/Year even when showing "My Scales"
                     const isDateMatch = d.getUTCMonth() === Number(filterMonth) && d.getUTCFullYear() === Number(filterYear);
                     return isDateMatch && ev.scaleStatus === 'ready' && myAtt?.isEscalated;
                 }
@@ -331,10 +331,53 @@
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), {
                     id: attId, eventId: event.id, eventName: event.name, eventDate: event.date, eventCategory: category,
                     userId: userProfile.uid, userName: userProfile.name, servingDept: deptName,
-                    status: status, isEscalated: false, timestamp: new Date().toISOString()
+                    status: status, isEscalated: false, timestamp: new Date().toISOString(),
+                    hasCheckedIn: false
                 });
                 setExpandedEvent(null);
                 showToast("Resposta salva com sucesso!");
+            };
+
+            const handleCheckin = async (e) => {
+                e.preventDefault();
+                if (!checkinModalEvent) return;
+
+                const event = checkinModalEvent;
+                const myAtt = attendance.find(a => a.eventId === event.id && a.userId === userProfile.uid);
+
+                if (!myAtt) {
+                    showToast("Erro: Disponibilidade não encontrada.");
+                    return;
+                }
+
+                // Validate Deadline
+                if (event.checkinDeadline && new Date() > new Date(event.checkinDeadline)) {
+                    showToast("O prazo para check-in encerrou."); // Changed to showToast
+                    return;
+                }
+
+                // Validate Code
+                const requiredCode = (event.checkinCode || "").trim();
+                const userCode = checkinCodeInput.trim();
+
+                // Case sensitive? Usually codes are uppercase. Let's be generous and compare uppercase.
+                if (requiredCode && requiredCode.toUpperCase() !== userCode.toUpperCase()) {
+                    showToast("Código de check-in inválido."); // Changed to showToast
+                    return;
+                }
+
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', myAtt.id), {
+                        hasCheckedIn: true,
+                        checkinTime: new Date().toISOString()
+                    });
+                    showToast("Check-in realizado com sucesso!");
+                    setCheckinModalEvent(null);
+                    setCheckinCodeInput("");
+                } catch (err) {
+                    console.error(err);
+                    showToast("Erro ao realizar check-in.");
+                }
             };
 
             return (
@@ -363,6 +406,10 @@
                             const now = new Date();
                             const deadlineDate = ev.deadline ? new Date(ev.deadline) : null;
                             const isExpired = deadlineDate && now > deadlineDate;
+                            
+                            // Checkin status
+                            const hasCheckedIn = myAtt?.hasCheckedIn;
+                            const checkinOpen = ev.checkinCode && (!ev.checkinDeadline || now <= new Date(ev.checkinDeadline));
 
                             return (
                                 <div key={ev.id} className={`bg-white rounded-[2rem] border p-5 shadow-sm transition-all flex flex-col md:flex-row items-center gap-4 md:gap-6 card-print ${isUserEscalated ? 'ring-2 ring-green-500 bg-green-50/10' : 'hover:border-primary/40'}`}>
@@ -386,12 +433,9 @@
                                         <h3 className="text-lg font-black uppercase text-gray-800 leading-tight">{ev.name}</h3>
                                         <div className="flex flex-wrap gap-2 justify-center md:justify-start text-[10px] font-bold text-gray-400 uppercase">
                                             <span className="flex items-center gap-1.5 bg-blue-100 text-blue-700 px-2 py-1 rounded"><Icon name="Clock" size={12}/> {ev.time}</span>
-                                            
-                                            {/* Custom Period Badge */}
                                             <span className={`flex items-center gap-1.5 px-2 py-1 rounded uppercase text-[9px] ${pStyle.bg} ${pStyle.text}`}>
                                                 <Icon name={pStyle.icon} size={12}/> {ev.period}
                                             </span>
-                                            
                                             <span className="flex items-center gap-1.5"><Icon name="MapPin" size={12}/> {ev.location || "Sede"}</span>
                                         </div>
                                         {isUserEscalated && (
@@ -402,7 +446,7 @@
                                         )}
                                         {ev.deadline && (
                                             <div className="text-[9px] text-red-400 font-bold uppercase">
-                                                Prazo: {new Date(ev.deadline).toLocaleString()} 
+                                                Prazo Disp.: {new Date(ev.deadline).toLocaleString()} 
                                                 {isExpired && !myAtt && <span className="ml-1 bg-red-100 text-red-600 px-1 rounded">Expirado</span>}
                                             </div>
                                         )}
@@ -411,12 +455,25 @@
                                     {/* Action */}
                                     <div className="w-full md:w-auto shrink-0 no-print">
                                         {(myAtt && expandedEvent !== ev.id) ? (
-                                            <div className="flex flex-col items-center md:items-end gap-1">
+                                            <div className="flex flex-col items-center md:items-end gap-2">
                                                 <span className={`px-4 py-1.5 rounded-lg font-black uppercase text-[9px] ${myAtt.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                                     {myAtt.status === 'present' 
                                                         ? (isUserEscalated ? `Escalado: ${myAtt.role || myAtt.servingDept}` : myAtt.servingDept) 
                                                         : 'Indisponível'}
                                                 </span>
+                                                
+                                                {/* Check-in Button */}
+                                                {isUserEscalated && !hasCheckedIn && checkinOpen && (
+                                                    <button onClick={() => setCheckinModalEvent(ev)} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase shadow-lg shadow-blue-200 animate-in hover:bg-blue-700">
+                                                        Fazer Check-in
+                                                    </button>
+                                                )}
+                                                {hasCheckedIn && (
+                                                    <span className="flex items-center gap-1 text-[9px] font-black uppercase text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                                        <Icon name="Check" size={10} /> Check-in Realizado
+                                                    </span>
+                                                )}
+
                                                 {!isReady && !isExpired && (
                                                     <button onClick={() => setExpandedEvent(ev.id)} className="text-[9px] font-bold text-gray-400 hover:text-primary underline">Alterar</button>
                                                 )}
@@ -444,6 +501,32 @@
                         })}
                         {filteredEvents.length === 0 && <p className="col-span-full py-20 text-center text-gray-300 font-black uppercase text-xs border-2 border-dashed rounded-[3rem]">Nenhum evento encontrado.</p>}
                     </div>
+
+                    {/* Check-in Modal */}
+                    {checkinModalEvent && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl animate-in">
+                                <h3 className="font-black uppercase text-lg text-gray-800 mb-2">Realizar Check-in</h3>
+                                <p className="text-xs text-gray-500 mb-6">Insira o código fornecido pela liderança para confirmar sua presença.</p>
+                                <form onSubmit={handleCheckin} className="space-y-4">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Código do Evento" 
+                                        className="w-full p-4 bg-gray-50 rounded-xl text-center font-black uppercase tracking-widest text-lg outline-none border-2 border-transparent focus:border-blue-500"
+                                        value={checkinCodeInput}
+                                        onChange={e => setCheckinCodeInput(e.target.value)}
+                                        autoFocus
+                                    />
+                                    <button type="submit" className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-xs shadow-lg hover:bg-blue-700">
+                                        Confirmar Presença
+                                    </button>
+                                    <button type="button" onClick={() => setCheckinModalEvent(null)} className="w-full py-2 text-gray-400 font-bold uppercase text-[10px]">
+                                        Cancelar
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -487,9 +570,10 @@
                 return d.getMonth() === Number(month) && d.getFullYear() === Number(year);
             }), [attendance, month, year]);
 
+            // Calculation based on Check-ins
             const totalResponses = filteredAtt.length;
-            const presentCount = filteredAtt.filter(a => a.status === 'present').length;
-            const presentRate = totalResponses > 0 ? Math.round((presentCount / totalResponses) * 100) : 0;
+            const checkinCount = filteredAtt.filter(a => a.hasCheckedIn).length; // New Metric
+            const presentRate = totalResponses > 0 ? Math.round((checkinCount / totalResponses) * 100) : 0; // Check-in Rate
 
             const searchedUsers = useMemo(() => {
                 if (!search) return [];
@@ -500,21 +584,26 @@
                 const userAtt = attendance.filter(a => a.userId === userId); 
                 const avail = userAtt.filter(a => a.status === 'present').length;
                 const escalated = userAtt.filter(a => a.isEscalated).length;
+                // New: Count Check-ins
+                const checkins = userAtt.filter(a => a.hasCheckedIn).length;
+                
                 const agendaEsc = userAtt.filter(a => a.isEscalated && a.eventCategory === 'Agenda Ministerial').length;
                 const congressosEsc = userAtt.filter(a => a.isEscalated && a.eventCategory === 'Congressos').length;
                 
                 const deptCounts = {};
-                userAtt.filter(a => a.status === 'present').forEach(a => {
+                // Count presence based on check-in for ranking
+                userAtt.filter(a => a.hasCheckedIn).forEach(a => {
                     deptCounts[a.servingDept] = (deptCounts[a.servingDept] || 0) + 1;
                 });
                 const sortedDepts = Object.entries(deptCounts).sort((a,b) => b[1] - a[1]);
                 
-                return { avail, escalated, agendaEsc, congressosEsc, topDepts: sortedDepts };
+                return { avail, escalated, checkins, agendaEsc, congressosEsc, topDepts: sortedDepts };
             };
 
             const getDeptStats = (deptName) => {
-                const deptAtts = filteredAtt.filter(a => a.servingDept === deptName && a.status === 'present');
-                const uniqueVolunteers = [...new Set(deptAtts.map(a => a.userId))];
+                // Filter by Check-in for ranking
+                const deptAtts = filteredAtt.filter(a => a.servingDept === deptName && a.hasCheckedIn);
+                const uniqueVolunteers = [...new Set(filteredAtt.filter(a => a.servingDept === deptName).map(a => a.userId))]; // Total pool
                 
                 const volCounts = {};
                 deptAtts.forEach(a => { volCounts[a.userName] = (volCounts[a.userName] || 0) + 1; });
@@ -522,7 +611,7 @@
 
                 return { 
                     count: uniqueVolunteers.length, 
-                    totalAvail: deptAtts.length,
+                    totalCheckins: deptAtts.length,
                     topVols 
                 };
             };
@@ -535,7 +624,7 @@
                         <div className="relative">
                             <Icon name="Search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input 
-                                placeholder="Pesquisar voluntário..." 
+                                placeholder="Pesquisar voluntário (Filtro por nome)..." 
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 text-gray-800" 
@@ -555,13 +644,13 @@
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <StatCard title="Total Respostas" value={totalResponses} iconName="MessageSquare" iconColor="text-blue-500" />
-                        <StatCard title="Presenças" value={presentCount} iconName="CheckCircle" iconColor="text-green-500" />
-                        <StatCard title="Taxa Presença" value={`${presentRate}%`} iconName="PieChart" iconColor="text-purple-500" />
+                        <StatCard title="Total Respostas" value={totalResponses} iconName="MessageSquare" iconColor="text-gray-500" />
+                        <StatCard title="Check-ins (Mês)" value={checkinCount} iconName="MapPin" iconColor="text-blue-500" />
+                        <StatCard title="Taxa Check-in" value={`${presentRate}%`} iconName="PieChart" iconColor="text-purple-500" />
                     </div>
 
                     <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm">
-                        <h3 className="text-xl font-black uppercase tracking-tight mb-6 text-gray-800">Presença por Departamento ({MONTHS[month]})</h3>
+                        <h3 className="text-xl font-black uppercase tracking-tight mb-6 text-gray-800">Ranking por Departamento (Check-ins - {MONTHS[month]})</h3>
                         <div className="space-y-4">
                             {departments.map(d => {
                                 const stats = getDeptStats(d.name);
@@ -573,11 +662,11 @@
                                             </div>
                                             <div>
                                                 <span className="font-black text-xs uppercase text-gray-700 block">{d.name}</span>
-                                                <span className="text-[9px] font-bold text-gray-400 uppercase">{stats.count} Voluntários Ativos</span>
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase">{stats.totalCheckins} Check-ins Realizados</span>
                                             </div>
                                         </div>
                                         <button onClick={() => setSelectedDeptReport({ ...d, ...stats })} className="px-4 py-2 bg-white border border-gray-200 text-gray-500 rounded-xl text-[9px] font-black uppercase hover:text-primary hover:border-primary">
-                                            Ver Detalhes
+                                            Ver Ranking
                                         </button>
                                     </div>
                                 );
@@ -593,32 +682,24 @@
                                     <button onClick={() => setSelectedVolunteer(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 mb-6">
-                                    <div className="p-4 bg-gray-50 rounded-2xl text-center">
-                                        <span className="block text-2xl font-black text-blue-600">{selectedVolunteer.avail}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Disponibilidades</span>
+                                    <div className="p-4 bg-blue-50 rounded-2xl text-center border border-blue-100">
+                                        <span className="block text-2xl font-black text-blue-600">{selectedVolunteer.checkins}</span>
+                                        <span className="text-[9px] font-bold uppercase text-gray-400">Total Check-ins (Geral)</span>
                                     </div>
                                     <div className="p-4 bg-gray-50 rounded-2xl text-center">
                                         <span className="block text-2xl font-black text-purple-600">{selectedVolunteer.escalated}</span>
                                         <span className="text-[9px] font-bold uppercase text-gray-400">Vezes Escalado</span>
                                     </div>
-                                    <div className="p-4 bg-gray-50 rounded-2xl text-center">
-                                        <span className="block text-xl font-black text-gray-800">{selectedVolunteer.agendaEsc}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Em Agenda</span>
-                                    </div>
-                                    <div className="p-4 bg-gray-50 rounded-2xl text-center">
-                                        <span className="block text-xl font-black text-gray-800">{selectedVolunteer.congressosEsc}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Em Congressos</span>
-                                    </div>
                                 </div>
                                 <div>
-                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-2">Departamentos Mais Atuantes</h4>
+                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-2">Participação por Departamento (Baseado em Check-in)</h4>
                                     <div className="flex flex-wrap gap-2">
                                         {selectedVolunteer.topDepts.map(([dept, count]) => (
                                             <span key={dept} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold uppercase border border-blue-100">
                                                 {dept}: {count}
                                             </span>
                                         ))}
-                                        {selectedVolunteer.topDepts.length === 0 && <span className="text-xs text-gray-300">Sem dados.</span>}
+                                        {selectedVolunteer.topDepts.length === 0 && <span className="text-xs text-gray-300">Sem check-ins registrados.</span>}
                                     </div>
                                 </div>
                             </div>
@@ -635,15 +716,15 @@
                                 <div className="grid grid-cols-2 gap-4 mb-6">
                                     <div className="p-4 bg-gray-50 rounded-2xl text-center">
                                         <span className="block text-2xl font-black text-gray-800">{selectedDeptReport.count}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Voluntários (Mês)</span>
+                                        <span className="text-[9px] font-bold uppercase text-gray-400">Escalados (Mês)</span>
                                     </div>
                                     <div className="p-4 bg-gray-50 rounded-2xl text-center">
-                                        <span className="block text-2xl font-black text-gray-800">{selectedDeptReport.totalAvail}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Disponibilidades</span>
+                                        <span className="block text-2xl font-black text-gray-800">{selectedDeptReport.totalCheckins}</span>
+                                        <span className="text-[9px] font-bold uppercase text-gray-400">Total Check-ins</span>
                                     </div>
                                 </div>
                                 <div>
-                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-3">Mais Presentes (Top 5)</h4>
+                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-3">Mais Presentes (Check-in Top 5)</h4>
                                     <div className="space-y-2">
                                         {selectedDeptReport.topVols.map(([name, count]) => (
                                             <div key={name} className="flex justify-between items-center p-2 border-b border-gray-50">
@@ -665,7 +746,7 @@
         
         function AdminCreateEventsView({ events, showToast }) {
             const [editingId, setEditingId] = useState(null);
-            const [form, setForm] = useState({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '' });
+            const [form, setForm] = useState({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '' });
             
             // List Filter State
             const [listFilterMonth, setListFilterMonth] = useState(new Date().getMonth());
@@ -687,19 +768,23 @@
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingId), data);
                         showToast("Evento atualizado!");
                         setEditingId(null);
-                        setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '' }); 
+                        setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '' }); 
                     } else {
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data);
                         showToast("Evento criado!");
                         // Keep Name and Location for next entry
-                        setForm(prev => ({ ...prev, date: '', time: '', deadline: '' })); 
+                        setForm(prev => ({ ...prev, date: '', time: '', deadline: '', checkinCode: '', checkinDeadline: '' })); 
                     }
                 } catch (err) { console.error(err); }
             };
 
             const handleEdit = (ev) => {
                 setEditingId(ev.id);
-                setForm({ name: ev.name, date: ev.date, time: ev.time, period: ev.period, location: ev.location, category: ev.category || 'Agenda Ministerial', deadline: ev.deadline || '' });
+                setForm({ 
+                    name: ev.name, date: ev.date, time: ev.time, period: ev.period, location: ev.location, 
+                    category: ev.category || 'Agenda Ministerial', deadline: ev.deadline || '',
+                    checkinCode: ev.checkinCode || '', checkinDeadline: ev.checkinDeadline || ''
+                });
             };
 
             const handleDeleteEvent = async (eventId) => {
@@ -727,7 +812,7 @@
                     <form onSubmit={handleSave} className="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4">
                         <div className="flex justify-between items-center mb-2">
                             <h3 className="font-black uppercase text-xs text-gray-400">{editingId ? 'Editando Evento' : 'Novo Evento'}</h3>
-                            {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '' }); }} className="text-[10px] text-red-500 font-bold uppercase">Cancelar Edição</button>}
+                            {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '' }); }} className="text-[10px] text-red-500 font-bold uppercase">Cancelar Edição</button>}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-1">
@@ -758,15 +843,25 @@
                                 </div>
                             </div>
                             <div className="space-y-1 md:col-span-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase">Prazo para Disponibilidade</label>
-                                <input type="datetime-local" value={form.deadline} onChange={e => setForm({...form, deadline: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
-                            </div>
-                            <div className="space-y-1 md:col-span-2">
                                 <label className="text-[10px] font-black text-gray-400 uppercase">Categoria</label>
                                 <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800">
                                     <option value="Agenda Ministerial">Agenda & Escalas</option>
                                     <option value="Congressos">Congressos</option>
                                 </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-gray-400 uppercase">Prazo Disponibilidade</label>
+                                <input type="datetime-local" value={form.deadline} onChange={e => setForm({...form, deadline: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
+                            </div>
+                            
+                            {/* Check-in Fields */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-blue-500 uppercase">Código Check-in</label>
+                                <input type="text" placeholder="Ex: CULTO123" value={form.checkinCode} onChange={e => setForm({...form, checkinCode: e.target.value})} className="w-full p-3 bg-blue-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-blue-200 text-gray-800" />
+                            </div>
+                            <div className="space-y-1 md:col-span-2">
+                                <label className="text-[10px] font-black text-blue-500 uppercase">Prazo Limite Check-in</label>
+                                <input type="datetime-local" value={form.checkinDeadline} onChange={e => setForm({...form, checkinDeadline: e.target.value})} className="w-full p-3 bg-blue-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-blue-200 text-gray-800" />
                             </div>
                         </div>
                         <button type="submit" className={`w-full py-3 text-white rounded-xl font-black uppercase text-[10px] transition ${editingId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}>
@@ -801,10 +896,9 @@
                                             <span className="text-[9px] font-bold uppercase bg-gray-100 text-gray-500 px-2 py-0.5 rounded border">{ev.category === 'Congressos' ? 'Congressos' : 'Agenda'}</span>
                                         </div>
                                         <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 uppercase">
-                                            {/* Date fix in list display */}
                                             <span className="flex items-center gap-1"><Icon name="Calendar" size={12}/> {new Date(ev.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
                                             <span className="flex items-center gap-1"><Icon name="Clock" size={12}/> {ev.time}</span>
-                                            <span className="flex items-center gap-1"><Icon name="MapPin" size={12}/> {ev.location || "---"}</span>
+                                            {ev.checkinCode && <span className="flex items-center gap-1 text-blue-500"><Icon name="Key" size={12}/> Código: {ev.checkinCode}</span>}
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
@@ -835,6 +929,9 @@
             const [scaleModalEvent, setScaleModalEvent] = useState(null);
             const [scaleModalDept, setScaleModalDept] = useState(null);
             const [expandedVolunteer, setExpandedVolunteer] = useState(null);
+            
+            // Check-in Report Modal
+            const [checkinReportEvent, setCheckinReportEvent] = useState(null);
 
             // Filter Logic
             const filteredEvents = useMemo(() => events.filter(ev => {
@@ -865,7 +962,7 @@
                 const absent = eventAtts.filter(a => a.status === 'absent');
                 
                 const respondedIds = eventAtts.map(a => a.userId);
-                const pendingUsers = users.filter(u => !respondedIds.includes(u.uid) && u.role !== 'master'); // Exclude master from pending stats
+                const pendingUsers = users.filter(u => !respondedIds.includes(u.uid) && u.role !== 'master'); 
 
                 return { present, absent, pendingUsers };
             };
@@ -916,10 +1013,16 @@
 
                                         {/* Actions */}
                                         <div className="flex flex-col gap-2 w-full md:w-auto">
-                                            <button onClick={() => setStatsModalEvent(ev)} className="px-4 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100 transition flex items-center justify-center gap-2">
-                                                <Icon name="BarChart2" size={14} /> 
-                                                Status ({present.length}/{present.length + absent.length + pendingUsers.length})
-                                            </button>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setStatsModalEvent(ev)} className="flex-1 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100 transition flex items-center justify-center gap-2">
+                                                    <Icon name="BarChart2" size={14} /> 
+                                                    Status
+                                                </button>
+                                                <button onClick={() => setCheckinReportEvent(ev)} className="flex-1 px-4 py-3 bg-teal-50 text-teal-600 rounded-xl text-[10px] font-black uppercase hover:bg-teal-100 transition flex items-center justify-center gap-2">
+                                                    <Icon name="MapPin" size={14} /> 
+                                                    Ver Check-in
+                                                </button>
+                                            </div>
                                             <button onClick={() => { setScaleModalEvent(ev); setScaleModalDept(departments[0]?.name); }} className="px-4 py-3 bg-purple-50 text-purple-600 rounded-xl text-[10px] font-black uppercase hover:bg-purple-100 transition flex items-center justify-center gap-2">
                                                 <Icon name="Users" size={14} /> Montar Escala
                                             </button>
@@ -1088,6 +1191,55 @@
                                             )}
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Check-in Report Modal */}
+                    {checkinReportEvent && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-4xl p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h3 className="font-black uppercase text-lg text-gray-800">Relatório de Check-in (Em Tempo Real)</h3>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase">{checkinReportEvent.name} • {new Date(checkinReportEvent.date).toLocaleDateString()}</p>
+                                    </div>
+                                    <button onClick={() => setCheckinReportEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {departments.map(d => {
+                                        const escalatedVolunteers = attendance.filter(a => a.eventId === checkinReportEvent.id && a.servingDept === d.name && a.isEscalated);
+                                        if (escalatedVolunteers.length === 0) return null;
+
+                                        return (
+                                            <div key={d.id} className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                                                <h4 className="font-black uppercase text-xs text-gray-800 mb-3 flex items-center gap-2" style={{ color: d.color }}>
+                                                    <Icon name="Briefcase" size={14} /> {d.name}
+                                                </h4>
+                                                <div className="space-y-2">
+                                                    {escalatedVolunteers.map(vol => (
+                                                        <div key={vol.id} className="flex justify-between items-center bg-white p-2 rounded-xl shadow-sm">
+                                                            <span className="text-[10px] font-bold uppercase text-gray-600 truncate max-w-[120px]">{vol.userName}</span>
+                                                            {vol.hasCheckedIn ? (
+                                                                <span className="text-[9px] font-black uppercase text-green-600 bg-green-50 px-2 py-1 rounded flex items-center gap-1">
+                                                                    <Icon name="CheckCircle" size={10} /> Presente
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[9px] font-black uppercase text-red-400 bg-red-50 px-2 py-1 rounded flex items-center gap-1">
+                                                                    <Icon name="XCircle" size={10} /> Ausente
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {attendance.filter(a => a.eventId === checkinReportEvent.id && a.isEscalated).length === 0 && (
+                                        <p className="col-span-full text-center py-10 text-gray-400 text-xs font-bold uppercase">Nenhum voluntário escalado para este evento.</p>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1621,7 +1773,7 @@
                 const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
                 const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
                 const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => {
-                     if (snap.empty) {
+                      if (snap.empty) {
                         ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' }));
                     } else {
                         setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() })));

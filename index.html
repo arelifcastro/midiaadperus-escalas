@@ -33,14 +33,26 @@
 
         /* Print Styles */
         @media print {
+            @page { margin: 1cm; size: A4; }
             .no-print { display: none !important; }
-            aside, header, button, .modal-overlay, .toast-container { display: none !important; }
-            main { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow: visible !important; }
-            .print-container { display: block !important; padding: 0 !important; }
-            .card-print { border: 1px solid #ddd !important; break-inside: avoid; page-break-inside: avoid; margin-bottom: 20px; box-shadow: none !important; }
-            body { background: white !important; -webkit-print-color-adjust: exact; }
+            aside, header, button, .modal-overlay, .toast-container, nav { display: none !important; }
+            main { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; overflow: visible !important; }
+            body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            
+            /* Card Breaks */
+            .card-print { 
+                break-inside: avoid; 
+                page-break-inside: avoid; 
+                margin-bottom: 20px; 
+                border: 1px solid #eee !important;
+                box-shadow: none !important;
+                background-color: white !important;
+            }
+
+            /* Adjust Colors for Print */
             .text-white { color: black !important; }
             .bg-primary { background-color: #eee !important; color: black !important; }
+            .bg-gray-50 { background-color: #f8f8f8 !important; }
         }
     </style>
 </head>
@@ -57,7 +69,7 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, doc, setDoc, updateDoc, collection, onSnapshot, 
-            addDoc, deleteDoc, getDoc, writeBatch, getDocs 
+            addDoc, deleteDoc, getDoc, writeBatch 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Configuration ---
@@ -156,7 +168,7 @@
                     <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm self-start">
                         {showDay && (
                             <select value={day || ""} onChange={e => setDay(e.target.value ? Number(e.target.value) : null)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
-                                <option value="">Todos</option>
+                                <option value="">Todos os Dias</option>
                                 {[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}
                             </select>
                         )}
@@ -233,9 +245,9 @@
                                         <input name="password" type="password" placeholder="Senha" required className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 transition text-gray-800" />
                                     </div>
                                 </div>
-                                
+                               
                                 {error && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 animate-in"><Icon name="AlertCircle" size={14}/> {error}</div>}
-                                
+                               
                                 <button 
                                     type="submit" 
                                     disabled={isProcessing} 
@@ -311,13 +323,13 @@
             const [dayFilter, setDayFilter] = useState('all'); 
             const [expandedEvent, setExpandedEvent] = useState(null);
             const [showEscalatedOnly, setShowEscalatedOnly] = useState(false);
-            
+           
             const [checkinEvent, setCheckinEvent] = useState(null);
             const [checkinCode, setCheckinCode] = useState("");
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date);
-                
+              
                 if (showEscalatedOnly) {
                     const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
                     const isDateMatch = d.getUTCMonth() === Number(filterMonth) && d.getUTCFullYear() === Number(filterYear);
@@ -325,13 +337,13 @@
                 }
 
                 if (d.getUTCMonth() !== Number(filterMonth) || d.getUTCFullYear() !== Number(filterYear)) return false;
-                
+              
                 const isCorrectCategory = category === "Agenda Ministerial" 
                     ? (!ev.category || ev.category === "Agenda Ministerial") 
                     : ev.category === category;
-                
+              
                 if (!isCorrectCategory) return false;
-                
+              
                 const dayOfWeek = d.getUTCDay(); 
                 if (dayFilter === 'week' && (dayOfWeek === 0 || dayOfWeek === 6)) return false;
                 if (dayFilter === 'saturday' && dayOfWeek !== 6) return false;
@@ -354,13 +366,15 @@
             const submitCheckin = async () => {
                 if (!checkinEvent) return;
                 const now = new Date();
-                const deadline = checkinEvent.checkinDeadline ? new Date(checkinEvent.checkinDeadline) : null;
+                const deadline1 = checkinEvent.checkinDeadline ? new Date(checkinEvent.checkinDeadline) : null;
+                const deadline2 = checkinEvent.checkinDeadline2 ? new Date(checkinEvent.checkinDeadline2) : null;
                 
-                if (deadline && now > deadline) {
-                    showToast("Prazo para check-in expirado.");
+                // Se já passou do prazo 2, não permite check-in (Ausente)
+                if (deadline2 && now > deadline2) {
+                    showToast("Prazo expirado. Contabilizado como Ausente.");
                     return;
                 }
-                
+
                 const codeInput = checkinCode.trim().toUpperCase();
                 const eventCode = (checkinEvent.checkinCode || "").trim().toUpperCase();
 
@@ -369,13 +383,27 @@
                     return;
                 }
 
+                let attendanceStatus = 'present'; // Check-in Ok
+                // Se passou do prazo 1 mas está dentro do prazo 2 (ou se não tem prazo 2 mas passou do 1)
+                // A regra: se deadline1 existe e passou -> atrasado.
+                if (deadline1 && now > deadline1) {
+                    attendanceStatus = 'late'; // Check-in Atrasado
+                }
+
                 const attId = `${checkinEvent.id}_${userProfile.uid}`;
                 try {
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), {
                         hasCheckedIn: true,
-                        checkinTime: new Date().toISOString()
+                        checkinTime: new Date().toISOString(),
+                        attendanceStatus: attendanceStatus
                     });
-                    showToast("Check-in realizado com sucesso!");
+                    
+                    if (attendanceStatus === 'late') {
+                        showToast("Check-in realizado com atraso.");
+                    } else {
+                        showToast("Check-in realizado com sucesso!");
+                    }
+                    
                     setCheckinEvent(null);
                     setCheckinCode("");
                 } catch (err) {
@@ -387,7 +415,7 @@
             return (
                 <div className="space-y-6">
                     <FilterHeader title={title} month={filterMonth} setMonth={setFilterMonth} year={filterYear} setYear={setFilterYear} />
-                    
+                   
                     <div className="flex flex-col md:flex-row justify-between gap-4 no-print">
                         <div className="flex bg-white p-1 rounded-2xl border shadow-sm overflow-x-auto">
                             {[{ id: 'all', label: 'Todos' }, { id: 'week', label: 'Semana' }, { id: 'saturday', label: 'Sábado' }, { id: 'sunday', label: 'Domingo' }].map(f => (
@@ -406,15 +434,16 @@
                             const isReady = ev.scaleStatus === 'ready';
                             const isUserEscalated = myAtt?.isEscalated && isReady;
                             const pStyle = getPeriodStyle(ev.period);
-                            
+                           
                             const now = new Date();
                             const deadlineDate = ev.deadline ? new Date(ev.deadline) : null;
                             const isExpired = deadlineDate && now > deadlineDate;
-                            
+                           
                             // Check-in logic
-                            const checkinDeadline = ev.checkinDeadline ? new Date(ev.checkinDeadline) : null;
-                            const isCheckinExpired = checkinDeadline && now > checkinDeadline;
-                            const isCheckinOpen = isUserEscalated && !isCheckinExpired && !myAtt.hasCheckedIn;
+                            // Checkin button logic: Show if escalated, not checked in, and within deadline 2 (or infinite if not set)
+                            const checkinDeadline2 = ev.checkinDeadline2 ? new Date(ev.checkinDeadline2) : null;
+                            const isCheckinExpired = checkinDeadline2 && now > checkinDeadline2;
+                            const isCheckinOpen = isUserEscalated && !myAtt.hasCheckedIn && !isCheckinExpired;
 
                             return (
                                 <div key={ev.id} className={`bg-white rounded-[2rem] border p-5 shadow-sm transition-all flex flex-col md:flex-row items-center gap-4 md:gap-6 card-print ${isUserEscalated ? 'ring-2 ring-green-500 bg-green-50/10' : 'hover:border-primary/40'}`}>
@@ -442,14 +471,14 @@
                                             </span>
                                             <span className="flex items-center gap-1.5"><Icon name="MapPin" size={12}/> {ev.location || "Sede"}</span>
                                         </div>
-                                        
+                                       
                                         {isUserEscalated && (
                                             <div className="text-purple-600 text-[10px] font-bold uppercase flex items-center justify-center md:justify-start gap-1">
                                                 <Icon name="Briefcase" size={12}/> 
                                                 Escalado em: {myAtt.servingDept}
                                             </div>
                                         )}
-                                        
+                                       
                                         {ev.deadline && (
                                             <div className="text-[9px] text-red-400 font-bold uppercase">
                                                 Prazo Disp.: {new Date(ev.deadline).toLocaleString()} 
@@ -467,7 +496,7 @@
                                                         ? (isUserEscalated ? (myAtt.role ? `Função: ${myAtt.role}` : 'Escalado') : myAtt.servingDept) 
                                                         : 'Indisponível'}
                                                 </span>
-                                                
+                                                 
                                                 {/* Check-in Status */}
                                                 {isCheckinOpen && (
                                                     <button onClick={() => setCheckinEvent(ev)} className="flex items-center gap-1 bg-orange-100 text-orange-600 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-orange-200 transition animate-bounce">
@@ -475,13 +504,14 @@
                                                     </button>
                                                 )}
                                                 {myAtt.hasCheckedIn && (
-                                                    <span className="flex items-center gap-1 text-green-600 text-[9px] font-black uppercase">
-                                                        <Icon name="CheckCheck" size={12} /> Check-in OK
+                                                    <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded ${myAtt.attendanceStatus === 'late' ? 'bg-yellow-100 text-yellow-700' : 'text-green-600'}`}>
+                                                        <Icon name={myAtt.attendanceStatus === 'late' ? "AlertTriangle" : "CheckCheck"} size={12} /> 
+                                                        {myAtt.attendanceStatus === 'late' ? "Check-in Atrasado" : "Check-in Ok"}
                                                     </span>
                                                 )}
                                                 {!myAtt.hasCheckedIn && isCheckinExpired && isUserEscalated && (
                                                     <span className="flex items-center gap-1 text-red-500 text-[9px] font-black uppercase bg-red-50 px-2 py-1 rounded">
-                                                        <Icon name="XCircle" size={12} /> Check-in não realizado
+                                                        <Icon name="XCircle" size={12} /> Ausente (Prazo)
                                                     </span>
                                                 )}
 
@@ -554,7 +584,7 @@
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date + 'T12:00:00');
-                
+              
                 const catMatch = ev.category === filterCategory || (!ev.category && filterCategory === 'Agenda Ministerial');
                 const yearMatch = d.getFullYear() === Number(filterYear);
                 const monthMatch = d.getMonth() === Number(filterMonth);
@@ -567,39 +597,46 @@
 
             return (
                 <div className="space-y-6">
-                    <div className="flex flex-col gap-4 mb-6">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Ver Escala Publicada</h1>
-                        <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm self-start">
-                            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
-                                <option value="Agenda Ministerial">Agenda</option>
-                                <option value="Congressos">Congressos</option>
-                            </select>
-                            <select value={filterDay} onChange={e => setFilterDay(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
-                                <option value="">Dia (Todos)</option>
-                                {[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}
-                            </select>
-                            <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
-                                {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                            </select>
-                            <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
-                                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                            </select>
-                            <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800">
-                                <option value="">Período (Todos)</option>
-                                <option value="Manhã">Manhã</option>
-                                <option value="Tarde">Tarde</option>
-                                <option value="Noite">Noite</option>
-                                <option value="Vigília">Vigília</option>
-                            </select>
+                        
+                        <div className="flex flex-col md:flex-row gap-4 items-end w-full md:w-auto no-print">
+                            <button onClick={() => window.print()} className="bg-gray-800 text-white px-4 py-2 rounded-xl font-bold uppercase text-[10px] flex items-center gap-2 hover:bg-gray-700 transition shadow-lg shadow-gray-200">
+                                <Icon name="Printer" size={16} /> Imprimir / Salvar PDF
+                            </button>
+
+                            <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm">
+                                <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                    <option value="Agenda Ministerial">Agenda</option>
+                                    <option value="Congressos">Congressos</option>
+                                </select>
+                                <select value={filterDay} onChange={e => setFilterDay(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                    <option value="">Dia (Todos)</option>
+                                    {[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}
+                                </select>
+                                <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                    {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                </select>
+                                <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                    {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                                <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800">
+                                    <option value="">Período (Todos)</option>
+                                    <option value="Manhã">Manhã</option>
+                                    <option value="Tarde">Tarde</option>
+                                    <option value="Noite">Noite</option>
+                                    <option value="Vigília">Vigília</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-6">
+                    <div className="grid grid-cols-1 gap-6 print:block">
                         {filteredEvents.map(ev => {
                             const pStyle = getPeriodStyle(ev.period);
                             // Get escalated volunteers for this event
                             const escalated = attendance.filter(a => a.eventId === ev.id && a.isEscalated);
-                            
+                           
                             // Group by Dept
                             const byDept = {};
                             departments.forEach(d => {
@@ -608,7 +645,7 @@
                             });
 
                             return (
-                                <div key={ev.id} className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden">
+                                <div key={ev.id} className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden card-print">
                                     <div className="bg-gray-50 p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
                                         <div>
                                             <h2 className="text-xl font-black uppercase text-gray-800">{ev.name}</h2>
@@ -621,7 +658,7 @@
                                     </div>
                                     <div className="p-6">
                                         {Object.keys(byDept).length > 0 ? (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 print:grid-cols-2">
                                                 {Object.entries(byDept).map(([deptName, data]) => (
                                                     <div key={deptName} className="border rounded-2xl p-4" style={{ borderLeft: `4px solid ${data.color}` }}>
                                                         <h3 className="font-black text-xs uppercase mb-3" style={{ color: data.color }}>{deptName}</h3>
@@ -675,192 +712,110 @@
             );
         }
 
-        function ReportsView({ title, attendance, allUsers, departments, events, showToast }) {
+        function ReportsView({ title, attendance, allUsers, departments }) {
             const [month, setMonth] = useState(new Date().getMonth());
             const [year, setYear] = useState(new Date().getFullYear());
+            const [day, setDay] = useState(null);
+            
             const [search, setSearch] = useState("");
-            const [startDate, setStartDate] = useState("");
-            const [endDate, setEndDate] = useState("");
             const [selectedVolunteer, setSelectedVolunteer] = useState(null);
             const [selectedDeptReport, setSelectedDeptReport] = useState(null);
-            const [showExportMenu, setShowExportMenu] = useState(false);
-            const [showClearConfirm, setShowClearConfirm] = useState(false);
-            const [isClearing, setIsClearing] = useState(false);
 
-            const filteredAtt = useMemo(() => attendance.filter(a => {
-                const d = new Date(a.timestamp);
-                return d.getMonth() === Number(month) && d.getFullYear() === Number(year);
-            }), [attendance, month, year]);
+            // Filtros de tempo para os modais de detalhes
+            const [detailMonth, setDetailMonth] = useState(new Date().getMonth());
+            const [detailYear, setDetailYear] = useState(new Date().getFullYear());
+            const [detailDay, setDetailDay] = useState(null);
 
-            const totalResponses = filteredAtt.length;
-            const presentCount = filteredAtt.filter(a => a.status === 'present').length;
-            const presentRate = totalResponses > 0 ? Math.round((presentCount / totalResponses) * 100) : 0;
+            // Sincronizar filtros iniciais do modal com os globais
+            useEffect(() => {
+                setDetailMonth(month);
+                setDetailYear(year);
+                setDetailDay(day);
+            }, [month, year, day, selectedVolunteer, selectedDeptReport]);
 
             const searchedUsers = useMemo(() => {
                 if (!search) return [];
                 return allUsers.filter(u => u.name.toLowerCase().includes(search.toLowerCase()));
             }, [allUsers, search]);
 
-            const getVolunteerStats = (userId) => {
+            const getVolunteerStats = (userId, m, y, d) => {
                 let userAtt = attendance.filter(a => a.userId === userId); 
                 
-                if (startDate && endDate) {
-                    const start = new Date(startDate);
-                    const end = new Date(endDate);
-                    end.setHours(23, 59, 59, 999);
-                    userAtt = userAtt.filter(a => {
-                        const d = new Date(a.eventDate);
-                        return d >= start && d <= end;
-                    });
-                } else {
-                    userAtt = userAtt.filter(a => {
-                        const d = new Date(a.eventDate);
-                        return d.getUTCMonth() === Number(month) && d.getUTCFullYear() === Number(year);
-                    });
-                }
+                userAtt = userAtt.filter(a => {
+                    const evtDate = new Date(a.eventDate);
+                    const sameMonth = evtDate.getUTCMonth() === Number(m);
+                    const sameYear = evtDate.getUTCFullYear() === Number(y);
+                    const sameDay = d ? evtDate.getUTCDate() === Number(d) : true;
+                    return sameMonth && sameYear && sameDay;
+                });
 
                 const avail = userAtt.filter(a => a.status === 'present').length;
+                const unavail = userAtt.filter(a => a.status === 'absent').length;
                 const escalated = userAtt.filter(a => a.isEscalated).length;
-                const checkins = userAtt.filter(a => a.hasCheckedIn).length; 
-                const agendaEsc = userAtt.filter(a => a.isEscalated && a.eventCategory === 'Agenda Ministerial').length;
-                const congressosEsc = userAtt.filter(a => a.isEscalated && a.eventCategory === 'Congressos').length;
+                const lates = userAtt.filter(a => a.attendanceStatus === 'late').length;
                 
+                // Ausente = Escalado e (Status Absent OU (Não Checkin e Data Passou))
+                // Simplificação: Se está 'late', não conta 'absent'.
+                // Se está 'present' (Checkin OK), não conta 'absent'.
+                // Se a data já passou e não tem checkin, é absent.
+                const absents = userAtt.filter(a => {
+                    if (!a.isEscalated) return false;
+                    const passed = new Date() > new Date(a.eventDate + 'T23:59:59');
+                    // Se não tem checkin e a data passou -> falta
+                    if (!a.hasCheckedIn && passed) return true;
+                    // Se o status explicito é absent (ex: marcado manualmente)
+                    if (a.attendanceStatus === 'absent') return true;
+                    return false;
+                }).length;
+
                 const deptCounts = {};
                 userAtt.filter(a => a.status === 'present').forEach(a => {
                     deptCounts[a.servingDept] = (deptCounts[a.servingDept] || 0) + 1;
                 });
                 const sortedDepts = Object.entries(deptCounts).sort((a,b) => b[1] - a[1]);
-                
-                return { avail, escalated, checkins, agendaEsc, congressosEsc, topDepts: sortedDepts };
+              
+                return { avail, unavail, escalated, lates, absents, topDepts: sortedDepts };
             };
 
-            const getDeptStats = (deptName) => {
+            const getDeptStats = (deptName, m, y, d) => {
                 const deptAtts = attendance.filter(a => {
-                    const d = new Date(a.eventDate);
+                    const evtDate = new Date(a.eventDate);
                     return a.servingDept === deptName && 
-                           d.getUTCMonth() === Number(month) && 
-                           d.getUTCFullYear() === Number(year);
+                           evtDate.getUTCMonth() === Number(m) && 
+                           evtDate.getUTCFullYear() === Number(y) &&
+                           (d ? evtDate.getUTCDate() === Number(d) : true);
                 });
                 
-                const uniqueVolunteers = [...new Set(deptAtts.map(a => a.userId))];
-                const volCounts = {};
-                deptAtts.filter(a => a.hasCheckedIn).forEach(a => { volCounts[a.userName] = (volCounts[a.userName] || 0) + 1; });
-                const topVols = Object.entries(volCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
+                const avail = deptAtts.filter(a => a.status === 'present').length;
+                const unavail = deptAtts.filter(a => a.status === 'absent').length;
+                const escalated = deptAtts.filter(a => a.isEscalated).length;
+                const lates = deptAtts.filter(a => a.attendanceStatus === 'late').length;
 
-                return { 
-                    count: uniqueVolunteers.length, 
-                    totalAvail: deptAtts.filter(a => a.status === 'present').length,
-                    topVols 
-                };
+                const absents = deptAtts.filter(a => {
+                     if (!a.isEscalated) return false;
+                     const passed = new Date() > new Date(a.eventDate + 'T23:59:59');
+                     if (!a.hasCheckedIn && passed) return true;
+                     if (a.attendanceStatus === 'absent') return true;
+                     return false;
+                }).length;
+
+                return { avail, unavail, escalated, lates, absents };
             };
 
-            const exportData = (type) => {
-                let dataToExport = [];
-                let filename = "";
-
-                if (type === 'monthly') {
-                    dataToExport = attendance.filter(a => {
-                        const d = new Date(a.eventDate);
-                        return d.getUTCMonth() === month && d.getUTCFullYear() === year;
-                    });
-                    filename = `Relatorio_Mensal_${MONTHS[month]}_${year}.csv`;
-                } else {
-                    dataToExport = attendance.filter(a => {
-                        const d = new Date(a.eventDate);
-                        return d.getUTCFullYear() === year;
-                    });
-                    filename = `Relatorio_Anual_${year}.csv`;
-                }
-
-                if (dataToExport.length === 0) {
-                    showToast("Sem dados para exportar.");
-                    return;
-                }
-
-                let csvContent = "data:text/csv;charset=utf-8,";
-                csvContent += "Evento,Data,Departamento,Voluntario,Status,Escalado,Check-in\n";
-
-                dataToExport.forEach(row => {
-                    const dateStr = new Date(row.eventDate).toLocaleDateString('pt-BR');
-                    const status = row.status === 'present' ? 'Presente' : 'Ausente';
-                    const escalated = row.isEscalated ? 'Sim' : 'Não';
-                    const checkin = row.hasCheckedIn ? 'Sim' : 'Não';
-                    csvContent += `${row.eventName},${dateStr},${row.servingDept},${row.userName},${status},${escalated},${checkin}\n`;
-                });
-
-                const encodedUri = encodeURI(csvContent);
-                const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
-                link.setAttribute("download", filename);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                setShowExportMenu(false);
-            };
-
-            const clearAllData = async () => {
-                setIsClearing(true);
-                try {
-                    const batch = writeBatch(db);
-                    
-                    const eventsSnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'events'));
-                    eventsSnapshot.forEach((doc) => {
-                        batch.delete(doc.ref);
-                    });
-
-                    const attSnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'));
-                    attSnapshot.forEach((doc) => {
-                        batch.delete(doc.ref);
-                    });
-
-                    await batch.commit();
-                    showToast("Dados limpos com sucesso!");
-                } catch (error) {
-                    console.error("Error clearing data:", error);
-                    showToast("Erro ao limpar dados.");
-                } finally {
-                    setIsClearing(false);
-                    setShowClearConfirm(false);
-                }
-            };
+            const volStats = selectedVolunteer ? getVolunteerStats(selectedVolunteer.uid, detailMonth, detailYear, detailDay) : null;
+            const deptStats = selectedDeptReport ? getDeptStats(selectedDeptReport.name, detailMonth, detailYear, detailDay) : null;
 
             return (
                 <div className="space-y-8">
-                    <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-                        <FilterHeader title={title} month={month} setMonth={setMonth} year={year} setYear={setYear} />
-                        <div className="flex gap-2 self-start md:self-center no-print">
-                            <div className="relative">
-                                <button onClick={() => setShowExportMenu(!showExportMenu)} className="px-4 py-3 bg-blue-100 text-blue-600 rounded-xl font-black uppercase text-[10px] hover:bg-blue-200 transition flex items-center gap-2">
-                                    <Icon name="Download" size={14} /> Exportar Relatório
-                                </button>
-                                {showExportMenu && (
-                                    <div className="absolute right-0 mt-2 bg-white shadow-xl rounded-xl border p-2 min-w-[200px] z-20 animate-in">
-                                        <button onClick={() => exportData('monthly')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 rounded-lg">Exportar Mensal ({MONTHS[month]})</button>
-                                        <button onClick={() => exportData('annual')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 rounded-lg">Exportar Anual ({year})</button>
-                                    </div>
-                                )}
-                            </div>
-                            <button onClick={() => setShowClearConfirm(true)} className="px-4 py-3 bg-red-100 text-red-600 rounded-xl font-black uppercase text-[10px] hover:bg-red-200 transition flex items-center gap-2">
-                                <Icon name="Trash2" size={14} /> Limpar Dados
-                            </button>
-                        </div>
-                    </div>
-                    
+                    <FilterHeader title={title} month={month} setMonth={setMonth} year={year} setYear={setYear} />
+                   
+                    {/* Pesquisa Voluntário */}
                     <div className="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4">
-                        <div className="flex flex-col md:flex-row gap-4 mb-4">
-                            <div className="flex-1">
-                                <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Início</label>
-                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl text-sm font-bold border-2 border-transparent focus:border-primary/20" />
-                            </div>
-                            <div className="flex-1">
-                                <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Fim</label>
-                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl text-sm font-bold border-2 border-transparent focus:border-primary/20" />
-                            </div>
-                        </div>
+                        <h3 className="font-black uppercase text-gray-800">Pesquisar Voluntários</h3>
                         <div className="relative">
                             <Icon name="Search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input 
-                                placeholder="Pesquisar voluntário..." 
+                                placeholder="Digite o nome..." 
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 text-gray-800" 
@@ -871,7 +826,7 @@
                                 {searchedUsers.map(u => (
                                     <div key={u.uid} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl">
                                         <span className="font-bold text-sm text-gray-800 uppercase">{u.name}</span>
-                                        <button onClick={() => setSelectedVolunteer({ ...u, ...getVolunteerStats(u.uid) })} className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg text-[10px] font-black uppercase hover:bg-blue-200">Ver Detalhes</button>
+                                        <button onClick={() => setSelectedVolunteer(u)} className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg text-[10px] font-black uppercase hover:bg-blue-200">Ver Detalhes</button>
                                     </div>
                                 ))}
                                 {searchedUsers.length === 0 && <p className="text-center text-xs text-gray-400 font-bold uppercase p-2">Nenhum voluntário encontrado.</p>}
@@ -879,119 +834,116 @@
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <StatCard title="Total Respostas" value={totalResponses} iconName="MessageSquare" iconColor="text-blue-500" />
-                        <StatCard title="Presenças" value={presentCount} iconName="CheckCircle" iconColor="text-green-500" />
-                        <StatCard title="Taxa Presença" value={`${presentRate}%`} iconName="PieChart" iconColor="text-purple-500" />
-                    </div>
-
+                    {/* Departamentos */}
                     <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm">
-                        <h3 className="text-xl font-black uppercase tracking-tight mb-6 text-gray-800">Presença por Departamento ({MONTHS[month]})</h3>
+                        <h3 className="text-xl font-black uppercase tracking-tight mb-6 text-gray-800">Presença por Departamento</h3>
                         <div className="space-y-4">
-                            {departments.map(d => {
-                                const stats = getDeptStats(d.name);
-                                return (
-                                    <div key={d.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm" style={{ color: d.color }}>
-                                                <Icon name="Briefcase" size={20} />
-                                            </div>
-                                            <div>
-                                                <span className="font-black text-xs uppercase text-gray-700 block">{d.name}</span>
-                                                <span className="text-[9px] font-bold text-gray-400 uppercase">{stats.count} Voluntários Ativos</span>
-                                            </div>
+                            {departments.map(d => (
+                                <div key={d.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm" style={{ color: d.color }}>
+                                            <Icon name="Briefcase" size={20} />
                                         </div>
-                                        <button onClick={() => setSelectedDeptReport({ ...d, ...stats })} className="px-4 py-2 bg-white border border-gray-200 text-gray-500 rounded-xl text-[9px] font-black uppercase hover:text-primary hover:border-primary">
-                                            Ver Detalhes
-                                        </button>
+                                        <div>
+                                            <span className="font-black text-xs uppercase text-gray-700 block">{d.name}</span>
+                                        </div>
                                     </div>
-                                );
-                            })}
+                                    <button onClick={() => setSelectedDeptReport(d)} className="px-4 py-2 bg-white border border-gray-200 text-gray-500 rounded-xl text-[9px] font-black uppercase hover:text-primary hover:border-primary">
+                                        Ver Detalhes
+                                    </button>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    {selectedVolunteer && (
+                    {/* Modal Voluntário */}
+                    {selectedVolunteer && volStats && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in">
-                                <div className="flex justify-between items-center mb-6">
+                                <div className="flex justify-between items-center mb-4">
                                     <h3 className="font-black uppercase text-lg text-gray-800">{selectedVolunteer.name}</h3>
                                     <button onClick={() => setSelectedVolunteer(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
                                 </div>
+                                
+                                {/* Filtros internos do modal */}
+                                <div className="flex gap-2 mb-6">
+                                    <select value={detailDay || ''} onChange={e => setDetailDay(e.target.value ? Number(e.target.value) : null)} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1"><option value="">Dia (Todos)</option>{[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
+                                    <select value={detailMonth} onChange={e => setDetailMonth(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                                    <select value={detailYear} onChange={e => setDetailYear(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-4 mb-6">
-                                    <div className="p-4 bg-gray-50 rounded-2xl text-center">
-                                        <span className="block text-2xl font-black text-blue-600">{selectedVolunteer.avail}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Disponibilidades</span>
-                                    </div>
-                                    <div className="p-4 bg-gray-50 rounded-2xl text-center">
-                                        <span className="block text-2xl font-black text-purple-600">{selectedVolunteer.escalated}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Vezes Escalado</span>
-                                    </div>
                                     <div className="p-4 bg-green-50 rounded-2xl text-center border border-green-100">
-                                        <span className="block text-2xl font-black text-green-600">{selectedVolunteer.checkins}</span>
-                                        <span className="text-[9px] font-bold uppercase text-green-800">Check-ins Realizados</span>
+                                        <span className="block text-2xl font-black text-green-600">{volStats.avail}</span>
+                                        <span className="text-[9px] font-bold uppercase text-green-800">Disponibilidades</span>
                                     </div>
-                                    <div className="p-4 bg-gray-50 rounded-2xl text-center">
-                                        <span className="block text-xl font-black text-gray-800">{selectedVolunteer.agendaEsc} / {selectedVolunteer.congressosEsc}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Agenda / Congressos</span>
+                                    <div className="p-4 bg-red-50 rounded-2xl text-center border border-red-100">
+                                        <span className="block text-2xl font-black text-red-600">{volStats.unavail}</span>
+                                        <span className="text-[9px] font-bold uppercase text-red-800">Indisponibilidades</span>
+                                    </div>
+                                    <div className="p-4 bg-purple-50 rounded-2xl text-center border border-purple-100">
+                                        <span className="block text-2xl font-black text-purple-600">{volStats.escalated}</span>
+                                        <span className="text-[9px] font-bold uppercase text-purple-800">Vezes Escalado</span>
+                                    </div>
+                                    <div className="p-4 bg-gray-50 rounded-2xl text-center border border-gray-100">
+                                        <span className="block text-xl font-black text-gray-800 flex justify-center gap-4">
+                                            <span className="text-red-500">{volStats.absents}</span> / <span className="text-yellow-500">{volStats.lates}</span>
+                                        </span>
+                                        <span className="text-[9px] font-bold uppercase text-gray-400">Faltas / Atrasos</span>
                                     </div>
                                 </div>
                                 <div>
                                     <h4 className="font-black uppercase text-xs text-gray-400 mb-2">Departamentos Mais Atuantes</h4>
                                     <div className="flex flex-wrap gap-2">
-                                        {selectedVolunteer.topDepts.map(([dept, count]) => (
+                                        {volStats.topDepts.map(([dept, count]) => (
                                             <span key={dept} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold uppercase border border-blue-100">
                                                 {dept}: {count}
                                             </span>
                                         ))}
-                                        {selectedVolunteer.topDepts.length === 0 && <span className="text-xs text-gray-300">Sem dados.</span>}
+                                        {volStats.topDepts.length === 0 && <span className="text-xs text-gray-300">Sem dados.</span>}
                                     </div>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {selectedDeptReport && (
+                    {/* Modal Departamento */}
+                    {selectedDeptReport && deptStats && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in">
-                                <div className="flex justify-between items-center mb-6">
+                                <div className="flex justify-between items-center mb-4">
                                     <h3 className="font-black uppercase text-lg text-gray-800" style={{ color: selectedDeptReport.color }}>{selectedDeptReport.name}</h3>
                                     <button onClick={() => setSelectedDeptReport(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4 mb-6">
-                                    <div className="p-4 bg-gray-50 rounded-2xl text-center">
-                                        <span className="block text-2xl font-black text-gray-800">{selectedDeptReport.count}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Voluntários (Mês)</span>
-                                    </div>
-                                    <div className="p-4 bg-gray-50 rounded-2xl text-center">
-                                        <span className="block text-2xl font-black text-gray-800">{selectedDeptReport.totalAvail}</span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Disponibilidades</span>
-                                    </div>
+                                
+                                <div className="flex gap-2 mb-6">
+                                    <select value={detailDay || ''} onChange={e => setDetailDay(e.target.value ? Number(e.target.value) : null)} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1"><option value="">Dia (Todos)</option>{[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
+                                    <select value={detailMonth} onChange={e => setDetailMonth(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                                    <select value={detailYear} onChange={e => setDetailYear(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
                                 </div>
-                                <div>
-                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-3">Mais Presentes (Check-ins)</h4>
-                                    <div className="space-y-2">
-                                        {selectedDeptReport.topVols.map(([name, count]) => (
-                                            <div key={name} className="flex justify-between items-center p-2 border-b border-gray-50">
-                                                <span className="font-bold text-xs uppercase text-gray-700">{name}</span>
-                                                <span className="font-black text-xs text-green-600">{count} Check-ins</span>
-                                            </div>
-                                        ))}
-                                        {selectedDeptReport.topVols.length === 0 && <span className="text-xs text-gray-300">Sem check-ins neste mês.</span>}
+
+                                <div className="grid grid-cols-2 gap-4 mb-6">
+                                    <div className="p-4 bg-green-50 rounded-2xl text-center border border-green-100">
+                                        <span className="block text-2xl font-black text-green-600">{deptStats.avail}</span>
+                                        <span className="text-[9px] font-bold uppercase text-green-800">Disponibilidades</span>
+                                    </div>
+                                    <div className="p-4 bg-red-50 rounded-2xl text-center border border-red-100">
+                                        <span className="block text-2xl font-black text-red-600">{deptStats.unavail}</span>
+                                        <span className="text-[9px] font-bold uppercase text-red-800">Indisponibilidades</span>
+                                    </div>
+                                    <div className="p-4 bg-purple-50 rounded-2xl text-center border border-purple-100">
+                                        <span className="block text-2xl font-black text-purple-600">{deptStats.escalated}</span>
+                                        <span className="text-[9px] font-bold uppercase text-purple-800">Escalações</span>
+                                    </div>
+                                    <div className="p-4 bg-gray-50 rounded-2xl text-center border border-gray-100">
+                                        <span className="block text-xl font-black text-gray-800 flex justify-center gap-4">
+                                            <span className="text-red-500">{deptStats.absents}</span> / <span className="text-yellow-500">{deptStats.lates}</span>
+                                        </span>
+                                        <span className="text-[9px] font-bold uppercase text-gray-400">Faltas / Atrasos</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    )}
-
-                    {showClearConfirm && (
-                        <ConfirmModal 
-                            title="Limpar TODOS os Dados" 
-                            message="Tem a certeza absoluta? Esta ação irá apagar TODOS os eventos criados e TODOS os registos de presença/escala. Esta ação é irreversível e reiniciará o sistema." 
-                            onConfirm={clearAllData} 
-                            onCancel={() => setShowClearConfirm(false)} 
-                            confirmText={isClearing ? "Limpando..." : "Sim, Limpar Tudo"} 
-                            isDangerous={true} 
-                        />
                     )}
                 </div>
             );
@@ -1001,7 +953,7 @@
         
         function AdminCreateEventsView({ events, showToast }) {
             const [editingId, setEditingId] = useState(null);
-            const [form, setForm] = useState({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '' });
+            const [form, setForm] = useState({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '', checkinDeadline2: '' });
             const [eventToDelete, setEventToDelete] = useState(null);
             const [listFilterMonth, setListFilterMonth] = useState(new Date().getMonth());
             const [listFilterYear, setListFilterYear] = useState(new Date().getFullYear());
@@ -1020,18 +972,18 @@
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingId), data);
                         showToast("Evento atualizado!");
                         setEditingId(null);
-                        setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '' }); 
+                        setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '', checkinDeadline2: '' }); 
                     } else {
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data);
                         showToast("Evento criado!");
-                        setForm(prev => ({ ...prev, date: '', time: '', deadline: '', checkinCode: '', checkinDeadline: '' })); 
+                        setForm(prev => ({ ...prev, date: '', time: '', deadline: '', checkinCode: '', checkinDeadline: '', checkinDeadline2: '' })); 
                     }
                 } catch (err) { console.error(err); }
             };
 
             const handleEdit = (ev) => {
                 setEditingId(ev.id);
-                setForm({ name: ev.name, date: ev.date, time: ev.time, period: ev.period, location: ev.location, category: ev.category || 'Agenda Ministerial', deadline: ev.deadline || '', checkinCode: ev.checkinCode || '', checkinDeadline: ev.checkinDeadline || '' });
+                setForm({ name: ev.name, date: ev.date, time: ev.time, period: ev.period, location: ev.location, category: ev.category || 'Agenda Ministerial', deadline: ev.deadline || '', checkinCode: ev.checkinCode || '', checkinDeadline: ev.checkinDeadline || '', checkinDeadline2: ev.checkinDeadline2 || '' });
             };
 
             const confirmDelete = async () => {
@@ -1060,7 +1012,7 @@
                     <form onSubmit={handleSave} className="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4">
                         <div className="flex justify-between items-center mb-2">
                             <h3 className="font-black uppercase text-xs text-gray-400">{editingId ? 'Editando Evento' : 'Novo Evento'}</h3>
-                            {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '' }); }} className="text-[10px] text-red-500 font-bold uppercase">Cancelar Edição</button>}
+                            {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '', checkinDeadline2: '' }); }} className="text-[10px] text-red-500 font-bold uppercase">Cancelar Edição</button>}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-1">
@@ -1101,15 +1053,19 @@
                                 <label className="text-[10px] font-black text-gray-400 uppercase">Prazo para Disponibilidade</label>
                                 <input type="datetime-local" value={form.deadline} onChange={e => setForm({...form, deadline: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
                             </div>
-                            
-                            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100 pt-4">
+                           
+                            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-gray-100 pt-4">
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-1"><Icon name="QrCode" size={12}/> Código de Check-in</label>
                                     <input value={form.checkinCode} onChange={e => setForm({...form, checkinCode: e.target.value.toUpperCase()})} placeholder="Ex: CULTO10" className="w-full p-3 bg-orange-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-orange-200 text-gray-800 uppercase" />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-1"><Icon name="Clock" size={12}/> Prazo Check-in</label>
+                                    <label className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-1"><Icon name="Clock" size={12}/> 1º Prazo Check-in (Ok)</label>
                                     <input type="datetime-local" value={form.checkinDeadline} onChange={e => setForm({...form, checkinDeadline: e.target.value})} className="w-full p-3 bg-orange-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-orange-200 text-gray-800" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-1"><Icon name="Clock" size={12}/> 2º Prazo Check-in (Tolerância)</label>
+                                    <input type="datetime-local" value={form.checkinDeadline2} onChange={e => setForm({...form, checkinDeadline2: e.target.value})} className="w-full p-3 bg-orange-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-orange-200 text-gray-800" />
                                 </div>
                             </div>
                         </div>
@@ -1168,20 +1124,18 @@
             );
         }
 
-        function AdminScalesView({ events, attendance, users, departments, showToast, userProfile }) {
+        function AdminScalesView({ events, attendance, users, departments, showToast, isLeader = false }) {
             const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
             const [filterYear, setFilterYear] = useState(new Date().getFullYear());
             const [filterCategory, setFilterCategory] = useState('all');
-            
+           
             const [statsModalEvent, setStatsModalEvent] = useState(null);
             const [statsTab, setStatsTab] = useState('present'); 
             const [scaleModalEvent, setScaleModalEvent] = useState(null);
             const [scaleModalDept, setScaleModalDept] = useState(null);
             const [expandedVolunteer, setExpandedVolunteer] = useState(null);
-            
+           
             const [checkinReportEvent, setCheckinReportEvent] = useState(null);
-
-            const isLeader = userProfile?.role === 'leader';
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date + 'T12:00:00'); 
@@ -1195,7 +1149,7 @@
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', event.id), { scaleStatus: newStatus }); 
                 showToast(`Escala ${newStatus === 'ready' ? 'publicada' : 'ocultada'}!`); 
             };
-            
+           
             const toggleEscalation = async (att, role = null) => { 
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', att.id), { 
                     isEscalated: !att.isEscalated,
@@ -1203,10 +1157,23 @@
                 }); 
             };
 
-            const forceCheckin = async (attId) => {
+            const forceStatus = async (attId, newStatus) => {
                 try {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), { hasCheckedIn: true, checkinTime: new Date().toISOString() });
-                    showToast("Check-in liberado manualmente.");
+                    // newStatus: 'present' (OK), 'late' (Atrasado), 'absent' (Ausente)
+                    // hasCheckedIn: true if present/late, false if absent
+                    const updates = { 
+                        attendanceStatus: newStatus,
+                        hasCheckedIn: newStatus !== 'absent'
+                    };
+                    if (newStatus !== 'absent') {
+                         updates.checkinTime = new Date().toISOString();
+                    } else {
+                         // Remove checkin time if marking as absent manually? Or keep history?
+                         // Keeping simple for now
+                    }
+
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), updates);
+                    showToast(`Status atualizado para ${newStatus}.`);
                 } catch(e) { console.error(e); }
             };
 
@@ -1214,7 +1181,7 @@
                 const eventAtts = attendance.filter(a => a.eventId === eventId);
                 const present = eventAtts.filter(a => a.status === 'present');
                 const absent = eventAtts.filter(a => a.status === 'absent');
-                
+              
                 const respondedIds = eventAtts.map(a => a.userId);
                 const pendingUsers = users.filter(u => !respondedIds.includes(u.uid) && u.role !== 'master');
 
@@ -1225,9 +1192,15 @@
                 const escalated = attendance.filter(a => a.eventId === eventId && a.isEscalated);
                 const grouped = {};
                 escalated.forEach(a => {
-                    if (!grouped[a.servingDept]) grouped[a.servingDept] = { present: [], absent: [] };
-                    if (a.hasCheckedIn) grouped[a.servingDept].present.push(a);
-                    else grouped[a.servingDept].absent.push(a);
+                    if (!grouped[a.servingDept]) grouped[a.servingDept] = { present: [], late: [], absent: [] };
+                    
+                    if (a.attendanceStatus === 'late') {
+                        grouped[a.servingDept].late.push(a);
+                    } else if (a.hasCheckedIn || a.attendanceStatus === 'present') {
+                        grouped[a.servingDept].present.push(a);
+                    } else {
+                        grouped[a.servingDept].absent.push(a);
+                    }
                 });
                 return grouped;
             };
@@ -1254,7 +1227,7 @@
                     <div className="space-y-4">
                         {filteredEvents.map(ev => {
                             const { present, absent, pendingUsers } = getEventLists(ev.id);
-                            
+                           
                             // Date formatting for Admin Scale View
                             const dateObj = new Date(ev.date + 'T12:00:00');
                             const weekDay = dateObj.toLocaleDateString('pt-BR', { weekday: 'long' });
@@ -1290,7 +1263,7 @@
                                         </div>
                                         <div className="flex flex-col gap-2 w-full md:w-auto">
                                             <div className="flex gap-2">
-                                                <button onClick={() => setStatsModalEvent(ev)} className={`flex-1 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100 transition flex items-center justify-center gap-2 ${isLeader ? 'w-full' : ''}`}>
+                                                <button onClick={() => setStatsModalEvent(ev)} className="flex-1 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100 transition flex items-center justify-center gap-2">
                                                     <Icon name="BarChart2" size={14} /> 
                                                     Status ({present.length}/{present.length + absent.length + pendingUsers.length})
                                                 </button>
@@ -1364,7 +1337,7 @@
                         </div>
                     )}
 
-                    {checkinReportEvent && (
+                    {checkinReportEvent && !isLeader && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
                                 <div className="flex justify-between items-center mb-6">
@@ -1378,20 +1351,47 @@
                                     {Object.entries(getCheckinReport(checkinReportEvent.id)).map(([deptName, data]) => (
                                         <div key={deptName} className="border-b border-gray-100 pb-4 last:border-0">
                                             <h4 className="font-black uppercase text-xs text-gray-800 mb-2">{deptName}</h4>
-                                            <div className="grid grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {/* Presentes */}
                                                 <div className="bg-green-50 p-2 rounded-xl">
                                                     <p className="text-[9px] font-black text-green-500 uppercase mb-1">Presentes ({data.present.length})</p>
                                                     {data.present.map(p => (
-                                                        <div key={p.id} className="text-[10px] font-bold text-green-800">{p.userName}</div>
+                                                        <div key={p.id} className="flex justify-between items-center mb-1">
+                                                            <span className="text-[10px] font-bold text-green-800">{p.userName}</span>
+                                                            <div className="flex gap-1">
+                                                                <button title="Mover para Atrasado" onClick={() => forceStatus(p.id, 'late')} className="text-[8px] bg-white border border-yellow-200 text-yellow-500 px-1 py-0.5 rounded hover:bg-yellow-100"><Icon name="Clock" size={8}/></button>
+                                                                <button title="Mover para Ausente" onClick={() => forceStatus(p.id, 'absent')} className="text-[8px] bg-white border border-red-200 text-red-500 px-1 py-0.5 rounded hover:bg-red-100"><Icon name="X" size={8}/></button>
+                                                            </div>
+                                                        </div>
                                                     ))}
                                                     {data.present.length === 0 && <span className="text-[9px] text-green-300 italic">Ninguém</span>}
                                                 </div>
+                                                
+                                                {/* Atrasados */}
+                                                <div className="bg-yellow-50 p-2 rounded-xl">
+                                                    <p className="text-[9px] font-black text-yellow-600 uppercase mb-1">Atrasados ({data.late.length})</p>
+                                                    {data.late.map(p => (
+                                                        <div key={p.id} className="flex justify-between items-center mb-1">
+                                                            <span className="text-[10px] font-bold text-yellow-800">{p.userName}</span>
+                                                            <div className="flex gap-1">
+                                                                <button title="Mover para Presente" onClick={() => forceStatus(p.id, 'present')} className="text-[8px] bg-white border border-green-200 text-green-500 px-1 py-0.5 rounded hover:bg-green-100"><Icon name="Check" size={8}/></button>
+                                                                <button title="Mover para Ausente" onClick={() => forceStatus(p.id, 'absent')} className="text-[8px] bg-white border border-red-200 text-red-500 px-1 py-0.5 rounded hover:bg-red-100"><Icon name="X" size={8}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {data.late.length === 0 && <span className="text-[9px] text-yellow-300 italic">Ninguém</span>}
+                                                </div>
+
+                                                {/* Ausentes */}
                                                 <div className="bg-red-50 p-2 rounded-xl">
                                                     <p className="text-[9px] font-black text-red-500 uppercase mb-1">Ausentes ({data.absent.length})</p>
                                                     {data.absent.map(a => (
                                                         <div key={a.id} className="flex justify-between items-center mb-1">
                                                             <span className="text-[10px] font-bold text-red-800">{a.userName}</span>
-                                                            <button onClick={() => forceCheckin(a.id)} className="text-[8px] bg-white border border-red-200 text-red-500 px-1.5 py-0.5 rounded hover:bg-red-100 uppercase">Liberar</button>
+                                                            <div className="flex gap-1">
+                                                                <button title="Mover para Presente" onClick={() => forceStatus(a.id, 'present')} className="text-[8px] bg-white border border-green-200 text-green-500 px-1 py-0.5 rounded hover:bg-green-100"><Icon name="Check" size={8}/></button>
+                                                                <button title="Mover para Atrasado" onClick={() => forceStatus(a.id, 'late')} className="text-[8px] bg-white border border-yellow-200 text-yellow-500 px-1 py-0.5 rounded hover:bg-yellow-100"><Icon name="Clock" size={8}/></button>
+                                                            </div>
                                                         </div>
                                                     ))}
                                                     {data.absent.length === 0 && <span className="text-[9px] text-red-300 italic">Ninguém</span>}
@@ -1469,7 +1469,6 @@
             );
         }
 
-        // ... (AdminDepartmentsView, AdminTeamView, MasterSettingsView - no changes, kept for context) ...
         function AdminDepartmentsView({ departments, showToast }) {
             const [editingDept, setEditingDept] = useState(null);
             const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1554,6 +1553,7 @@
             const [isUserModalOpen, setIsUserModalOpen] = useState(false);
             const [userForm, setUserForm] = useState({ name: '', password: '', unitType: '', unitName: '', departments: [] });
             const [userToDelete, setUserToDelete] = useState(null);
+            const [searchTerm, setSearchTerm] = useState("");
 
             const handleSaveUser = async (e) => {
                 e.preventDefault();
@@ -1573,12 +1573,50 @@
             const confirmDelete = async () => { if(userToDelete) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userToDelete)); showToast("Membro excluído."); setUserToDelete(null); } };
             const toggleUserStatus = async (user) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), { status: user.status === 'active' ? 'blocked' : 'active' }); showToast("Status alterado."); };
 
+            const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
             return (
                 <div className="space-y-6">
                     <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Gerenciar Equipe</h1>
+                    
                     <div className="space-y-4">
                         <button onClick={openNewUser} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-purple-100 hover:bg-purple-700 transition flex items-center justify-center gap-2"><Icon name="Plus" size={16} /> Adicionar Novo Membro</button>
-                        <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden"><div className="divide-y divide-gray-50">{users.map(u => (<div key={u.uid} className="p-4 flex items-center justify-between hover:bg-gray-50 transition"><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black uppercase ${u.status === 'blocked' ? 'bg-red-400' : u.role === 'admin' || u.role === 'master' ? 'bg-purple-600' : 'bg-green-400'}`}>{u.name.charAt(0)}</div><div><p className="font-bold text-sm text-gray-800 uppercase">{u.name}</p><p className="text-[10px] text-gray-400 font-bold uppercase">{u.role === 'master' ? 'Master Admin' : u.role === 'admin' ? 'Administrador' : 'Voluntário'} • Senha: {u.password}</p></div></div><div className="flex gap-2"><button onClick={() => openEditUser(u)} className="p-2 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100"><Icon name="Edit2" size={16} /></button>{u.role !== 'master' && (<><button onClick={() => toggleUserStatus(u)} className={`p-2 rounded-lg ${u.status === 'active' ? 'bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500' : 'bg-green-100 text-green-500'}`}><Icon name={u.status === 'active' ? 'Lock' : 'Unlock'} size={16} /></button><button onClick={() => setUserToDelete(u.uid)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Icon name="Trash2" size={16} /></button></>)}</div></div>))}</div></div>
+                        
+                        {/* Search Bar */}
+                        <div className="relative">
+                            <Icon name="Search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input 
+                                placeholder="Pesquisar membro..." 
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="w-full pl-12 pr-4 py-3 bg-white rounded-xl border border-gray-100 focus:border-purple-200 outline-none" 
+                            />
+                        </div>
+
+                        <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden">
+                            <div className="divide-y divide-gray-50">
+                                {filteredUsers.map(u => (
+                                    <div key={u.uid} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black uppercase ${u.status === 'blocked' ? 'bg-red-400' : u.role === 'admin' || u.role === 'master' ? 'bg-purple-600' : 'bg-green-400'}`}>{u.name.charAt(0)}</div>
+                                            <div>
+                                                <p className="font-bold text-sm text-gray-800 uppercase">{u.name}</p>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase">{u.role === 'master' ? 'Master Admin' : u.role === 'admin' ? 'Administrador' : 'Voluntário'} • Senha: {u.password}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => openEditUser(u)} className="p-2 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100"><Icon name="Edit2" size={16} /></button>
+                                            {u.role !== 'master' && (
+                                                <>
+                                                    <button onClick={() => toggleUserStatus(u)} className={`p-2 rounded-lg ${u.status === 'active' ? 'bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500' : 'bg-green-100 text-green-500'}`}><Icon name={u.status === 'active' ? 'Lock' : 'Unlock'} size={16} /></button>
+                                                    <button onClick={() => setUserToDelete(u.uid)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Icon name="Trash2" size={16} /></button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                     {isUserModalOpen && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
@@ -1660,9 +1698,49 @@
             useEffect(() => { if (!firebaseUser) return; const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (docSnap) => { if (docSnap.exists()) { setAppSettings(prev => ({ ...prev, ...docSnap.data() })); } }); return () => unsubSettings(); }, [firebaseUser]);
             const handleUpdateSettings = async (newSettings) => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), newSettings, { merge: true }); setToastMsg("Configurações salvas!"); } catch (e) { console.error(e); setToastMsg("Erro ao salvar."); } };
             
-            useEffect(() => { if (!firebaseUser) return; const seedData = async () => { const masterDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master')); if (!masterDoc.exists()) { const initialUsers = [ { name: "Master", pass: "adm2026", role: "master" }, { name: "Liderança", pass: "lider2026", role: "leader" }, { name: "Areli Castro", pass: "areli2026", role: "user" }, { name: "Isabelle Neves", pass: "belle2026", role: "user" }, { name: "Felipe Silva", pass: "felipe2026", role: "user" }, { name: "Adriel Carvalho", pass: "adriel2026", role: "user" }, { name: "Charles Santos", pass: "charles2026", role: "user" }, { name: "Leandro da Silva", pass: "leo2026", role: "user" }, { name: "Leandro Cavalcante", pass: "leo2026", role: "user" }, { name: "Julia Gonçalves", pass: "julia2026", role: "user" }, { name: "Macário", pass: "macario2026", role: "user" }, { name: "Maranhão", pass: "maranhao2026", role: "user" }, { name: "Bruno Ventura", pass: "bruno2026", role: "user" } ]; const batch = writeBatch(db); initialUsers.forEach(u => { const id = u.name.trim().toLowerCase().replace(/\s+/g, '_'); const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id); batch.set(docRef, { name: u.name, username: u.name, password: u.pass, role: u.role, status: 'active', unitType: u.role === 'master' ? 'Geral' : 'Regional', unitName: u.role === 'master' ? 'Sede' : 'Sede', participatingDepts: [], createdAt: new Date().toISOString() }); }); await batch.commit(); } }; seedData(); }, [firebaseUser]);
+            useEffect(() => { 
+                if (!firebaseUser) return; 
+                const seedData = async () => { 
+                    const masterDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master')); 
+                    if (!masterDoc.exists()) { 
+                        const initialUsers = [ 
+                            { name: "Master", pass: "adm2026", role: "master" }, 
+                            { name: "Areli Castro", pass: "areli2026", role: "user" }, 
+                            { name: "Liderança", pass: "lider2026", role: "admin", specialRole: "leader" }, // Novo usuário Liderança
+                            { name: "Isabelle Neves", pass: "belle2026", role: "user" }, 
+                            { name: "Felipe Silva", pass: "felipe2026", role: "user" }, 
+                            { name: "Adriel Carvalho", pass: "adriel2026", role: "user" }, 
+                            { name: "Charles Santos", pass: "charles2026", role: "user" }, 
+                            { name: "Leandro da Silva", pass: "leo2026", role: "user" }, 
+                            { name: "Leandro Cavalcante", pass: "leo2026", role: "user" }, 
+                            { name: "Julia Gonçalves", pass: "julia2026", role: "user" }, 
+                            { name: "Macário", pass: "macario2026", role: "user" }, 
+                            { name: "Maranhão", pass: "maranhao2026", role: "user" }, 
+                            { name: "Bruno Ventura", pass: "bruno2026", role: "user" } 
+                        ]; 
+                        const batch = writeBatch(db); 
+                        initialUsers.forEach(u => { 
+                            const id = u.name.trim().toLowerCase().replace(/\s+/g, '_'); 
+                            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id); 
+                            batch.set(docRef, { 
+                                name: u.name, 
+                                username: u.name, 
+                                password: u.pass, 
+                                role: u.role, 
+                                status: 'active', 
+                                unitType: u.role === 'master' ? 'Geral' : 'Regional', 
+                                unitName: 'Sede', 
+                                participatingDepts: [], 
+                                createdAt: new Date().toISOString() 
+                            }); 
+                        }); 
+                        await batch.commit(); 
+                    } 
+                }; 
+                seedData(); 
+            }, [firebaseUser]);
 
-            useEffect(() => { if (!firebaseUser || !userData) return; const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); setUserData({ uid: docSnap.id, ...data }); } }); const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => { if (snap.empty) { ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' })); } else { setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() }))); } }); let unsubAllUsers = () => {}; if (userData.role === 'admin' || userData.role === 'master' || userData.role === 'leader') { unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })))); } return () => { unsubProfile(); unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); }; }, [firebaseUser, userData?.uid, userData?.role]);
+            useEffect(() => { if (!firebaseUser || !userData) return; const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); setUserData({ uid: docSnap.id, ...data }); } }); const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => { if (snap.empty) { ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' })); } else { setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() }))); } }); let unsubAllUsers = () => {}; if (userData.role === 'admin' || userData.role === 'master') { unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })))); } return () => { unsubProfile(); unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); }; }, [firebaseUser, userData?.uid, userData?.role]);
 
             const handleLogin = async (e) => { e.preventDefault(); setLoginError(null); setAuthLoading(true); const username = e.target.username.value; const password = e.target.password.value; try { if (!firebaseUser) await signInAnonymously(auth); const userId = username.trim().toLowerCase().replace(/\s+/g, '_'); const userSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId)); if (userSnap.exists() && userSnap.data().password === password) { setUserData({ uid: userSnap.id, ...userSnap.data() }); } else { setLoginError("Credenciais inválidas."); } } catch (err) { setLoginError("Erro na conexão."); } finally { setAuthLoading(false); } };
             const handleLogout = () => setUserData(null);
@@ -1672,7 +1750,7 @@
             if (userData.status === 'blocked') return <BlockedScreen onLogout={handleLogout} />;
 
             const isAdmin = userData.role === 'admin' || userData.role === 'master';
-            const isLeader = userData.role === 'leader';
+            const isLeader = userData.name === "Liderança"; // Identifica usuário Liderança
 
             return (
                 <div className="flex min-h-screen bg-gray-50 text-gray-800 font-sans selection:bg-primary/20">
@@ -1684,26 +1762,41 @@
                             <NavItem active={view === 'agenda'} iconName="Calendar" label={appSettings.tabNames.agenda} onClick={() => setView('agenda')} open={true} />
                             <NavItem active={view === 'congressos'} iconName="Trophy" label={appSettings.tabNames.congressos} onClick={() => setView('congressos')} open={true} />
                             <NavItem active={view === 'depts'} iconName="Briefcase" label={appSettings.tabNames.departments} onClick={() => setView('depts')} open={true} />
-                            {(isAdmin || isLeader) && (<><div className="my-6 border-t border-gray-100"></div><p className="px-4 text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
-                            {isAdmin && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => setView('create_events')} open={true} />}
+                            {isAdmin && (<><div className="my-6 border-t border-gray-100"></div><p className="px-4 text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
+                            
+                            {!isLeader && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => setView('create_events')} open={true} />}
+                            
                             <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => setView('manage_scales')} open={true} />
-                            {isAdmin && <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => setView('view_scale')} open={true} />}
-                            {isAdmin && <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => setView('manage_team')} open={true} />}
-                            {isAdmin && <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => setView('manage_depts')} open={true} />}
-                            {isAdmin && <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => setView('reports')} open={true} />}
-                            {isAdmin && <><div className="my-2"></div><NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => setView('admin_master')} open={true} /></>}</>)}
+                            
+                            {!isLeader && (
+                                <>
+                                    <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => setView('view_scale')} open={true} />
+                                    <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => setView('manage_team')} open={true} />
+                                    <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => setView('manage_depts')} open={true} />
+                                    <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => setView('reports')} open={true} />
+                                    <div className="my-2"></div>
+                                    <NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => setView('admin_master')} open={true} />
+                                </>
+                            )}
+                            </>)}
                         </nav>
                         <div className="mt-8 pt-6 border-t border-gray-100 flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-black text-gray-500 uppercase">{userData.name.charAt(0)}</div><div className="flex-1 overflow-hidden"><p className="font-bold text-xs truncate text-gray-800">{userData.name}</p><button onClick={handleLogout} className="text-[10px] text-red-400 font-bold uppercase hover:text-red-600">Sair</button></div></div>
                     </aside>
-                    {(isAdmin || isLeader) && (<div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-50"><div className="flex items-center gap-2"><div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white overflow-hidden">{appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={16} />}</div><h1 className="font-black uppercase text-xs text-gray-800">{appSettings.loginTitle}</h1></div><button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-gray-50 rounded-xl text-gray-500"><Icon name="Menu" size={24} /></button></div>)}
-                    {(isAdmin || isLeader) && isMobileMenuOpen && (<div className="fixed inset-0 z-[60] flex md:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div><div className="relative w-64 bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in"><div className="flex justify-between items-center mb-8"><h2 className="font-black uppercase text-lg text-gray-800">Menu Admin</h2><button onClick={() => setIsMobileMenuOpen(false)}><Icon name="X" size={24} /></button></div><div className="space-y-2"><p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
-                    {isAdmin && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => { setView('create_events'); setIsMobileMenuOpen(false); }} open={true} />}
-                    <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => { setView('manage_scales'); setIsMobileMenuOpen(false); }} open={true} />
-                    {isAdmin && <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => { setView('view_scale'); setIsMobileMenuOpen(false); }} open={true} />}
-                    {isAdmin && <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => { setView('manage_team'); setIsMobileMenuOpen(false); }} open={true} />}
-                    {isAdmin && <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => { setView('manage_depts'); setIsMobileMenuOpen(false); }} open={true} />}
-                    {isAdmin && <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => { setView('reports'); setIsMobileMenuOpen(false); }} open={true} />}
-                    {isAdmin && <><div className="my-4 border-t border-gray-100"></div><NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => { setView('admin_master'); setIsMobileMenuOpen(false); }} open={true} /></>}</div></div></div>)}
+                    {isAdmin && (<div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-50"><div className="flex items-center gap-2"><div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white overflow-hidden">{appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={16} />}</div><h1 className="font-black uppercase text-xs text-gray-800">{appSettings.loginTitle}</h1></div><button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-gray-50 rounded-xl text-gray-500"><Icon name="Menu" size={24} /></button></div>)}
+                    {isAdmin && isMobileMenuOpen && (<div className="fixed inset-0 z-[60] flex md:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div><div className="relative w-64 bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in"><div className="flex justify-between items-center mb-8"><h2 className="font-black uppercase text-lg text-gray-800">Menu Admin</h2><button onClick={() => setIsMobileMenuOpen(false)}><Icon name="X" size={24} /></button></div><div className="space-y-2"><p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
+                        {!isLeader && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => { setView('create_events'); setIsMobileMenuOpen(false); }} open={true} />}
+                        <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => { setView('manage_scales'); setIsMobileMenuOpen(false); }} open={true} />
+                        {!isLeader && (
+                            <>
+                                <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => { setView('view_scale'); setIsMobileMenuOpen(false); }} open={true} />
+                                <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => { setView('manage_team'); setIsMobileMenuOpen(false); }} open={true} />
+                                <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => { setView('manage_depts'); setIsMobileMenuOpen(false); }} open={true} />
+                                <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => { setView('reports'); setIsMobileMenuOpen(false); }} open={true} />
+                                <div className="my-4 border-t border-gray-100"></div>
+                                <NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => { setView('admin_master'); setIsMobileMenuOpen(false); }} open={true} />
+                            </>
+                        )}
+                        </div></div></div>)}
                     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-2 pb-safe flex justify-around items-center z-50 no-print shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                          <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}><Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /><span className="text-[9px] font-bold">Painel</span></button>
                          <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} /><span className="text-[9px] font-bold">Agenda</span></button>
@@ -1711,18 +1804,18 @@
                          <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>
                          <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400"><Icon name="LogOut" size={20} /><span className="text-[9px] font-bold">Sair</span></button>
                     </div>
-                    <main className={`flex-1 md:ml-72 p-4 md:p-12 mb-24 md:mb-0 max-w-7xl mx-auto w-full ${(isAdmin || isLeader) ? 'mt-16 md:mt-0' : ''}`}>
+                    <main className={`flex-1 md:ml-72 p-4 md:p-12 mb-24 md:mb-0 max-w-7xl mx-auto w-full ${isAdmin ? 'mt-16 md:mt-0' : ''}`}>
                         {view === 'dashboard' && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}
                         {view === 'agenda' && <AgendaView title={appSettings.tabNames.agenda} category="Agenda Ministerial" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
                         {view === 'congressos' && <AgendaView title={appSettings.tabNames.congressos} category="Congressos" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
-                        {view === 'view_scale' && isAdmin && <ViewScaleView events={events} attendance={attendance} departments={departments} />}
+                        {view === 'view_scale' && isAdmin && !isLeader && <ViewScaleView events={events} attendance={attendance} departments={departments} />}
                         {view === 'depts' && <UserDepartments title={appSettings.tabNames.departments} departments={departments} userProfile={userData} />}
-                        {isAdmin && view === 'create_events' && <AdminCreateEventsView events={events} showToast={showToast} />}
-                        {(isAdmin || isLeader) && view === 'manage_scales' && <AdminScalesView events={events} attendance={attendance} users={allUsers} departments={departments} showToast={showToast} userProfile={userData} />}
-                        {isAdmin && view === 'manage_team' && <AdminTeamView users={allUsers} departments={departments} showToast={showToast} />}
-                        {isAdmin && view === 'manage_depts' && <AdminDepartmentsView departments={departments} showToast={showToast} />}
-                        {isAdmin && view === 'reports' && <ReportsView title={appSettings.tabNames.reports} attendance={attendance} allUsers={allUsers} departments={departments} events={events} showToast={showToast} />}
-                        {isAdmin && view === 'admin_master' && <MasterSettingsView settings={appSettings} onUpdateSettings={handleUpdateSettings} showToast={showToast} />}
+                        {isAdmin && view === 'create_events' && !isLeader && <AdminCreateEventsView events={events} showToast={showToast} />}
+                        {isAdmin && view === 'manage_scales' && <AdminScalesView events={events} attendance={attendance} users={allUsers} departments={departments} showToast={showToast} isLeader={isLeader} />}
+                        {isAdmin && view === 'manage_team' && !isLeader && <AdminTeamView users={allUsers} departments={departments} showToast={showToast} />}
+                        {isAdmin && view === 'manage_depts' && !isLeader && <AdminDepartmentsView departments={departments} showToast={showToast} />}
+                        {isAdmin && view === 'reports' && !isLeader && <ReportsView title={appSettings.tabNames.reports} attendance={attendance} allUsers={allUsers} departments={departments} />}
+                        {isAdmin && view === 'admin_master' && !isLeader && <MasterSettingsView settings={appSettings} onUpdateSettings={handleUpdateSettings} showToast={showToast} />}
                     </main>
                     {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
                 </div>

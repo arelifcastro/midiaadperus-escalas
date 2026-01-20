@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+Atualizado  <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
@@ -245,9 +245,9 @@
                                         <input name="password" type="password" placeholder="Senha" required className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 transition text-gray-800" />
                                     </div>
                                 </div>
-                                
+                               
                                 {error && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 animate-in"><Icon name="AlertCircle" size={14}/> {error}</div>}
-                                
+                               
                                 <button 
                                     type="submit" 
                                     disabled={isProcessing} 
@@ -323,13 +323,13 @@
             const [dayFilter, setDayFilter] = useState('all'); 
             const [expandedEvent, setExpandedEvent] = useState(null);
             const [showEscalatedOnly, setShowEscalatedOnly] = useState(false);
-            
+           
             const [checkinEvent, setCheckinEvent] = useState(null);
             const [checkinCode, setCheckinCode] = useState("");
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date);
-               
+              
                 if (showEscalatedOnly) {
                     const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
                     const isDateMatch = d.getUTCMonth() === Number(filterMonth) && d.getUTCFullYear() === Number(filterYear);
@@ -337,13 +337,13 @@
                 }
 
                 if (d.getUTCMonth() !== Number(filterMonth) || d.getUTCFullYear() !== Number(filterYear)) return false;
-               
+              
                 const isCorrectCategory = category === "Agenda Ministerial" 
                     ? (!ev.category || ev.category === "Agenda Ministerial") 
                     : ev.category === category;
-               
+              
                 if (!isCorrectCategory) return false;
-               
+              
                 const dayOfWeek = d.getUTCDay(); 
                 if (dayFilter === 'week' && (dayOfWeek === 0 || dayOfWeek === 6)) return false;
                 if (dayFilter === 'saturday' && dayOfWeek !== 6) return false;
@@ -415,7 +415,7 @@
             return (
                 <div className="space-y-6">
                     <FilterHeader title={title} month={filterMonth} setMonth={setFilterMonth} year={filterYear} setYear={setFilterYear} />
-                    
+                   
                     <div className="flex flex-col md:flex-row justify-between gap-4 no-print">
                         <div className="flex bg-white p-1 rounded-2xl border shadow-sm overflow-x-auto">
                             {[{ id: 'all', label: 'Todos' }, { id: 'week', label: 'Semana' }, { id: 'saturday', label: 'Sábado' }, { id: 'sunday', label: 'Domingo' }].map(f => (
@@ -434,11 +434,11 @@
                             const isReady = ev.scaleStatus === 'ready';
                             const isUserEscalated = myAtt?.isEscalated && isReady;
                             const pStyle = getPeriodStyle(ev.period);
-                            
+                           
                             const now = new Date();
                             const deadlineDate = ev.deadline ? new Date(ev.deadline) : null;
                             const isExpired = deadlineDate && now > deadlineDate;
-                            
+                           
                             // Check-in logic
                             // Checkin button logic: Show if escalated, not checked in, and within deadline 2 (or infinite if not set)
                             const checkinDeadline2 = ev.checkinDeadline2 ? new Date(ev.checkinDeadline2) : null;
@@ -471,14 +471,14 @@
                                             </span>
                                             <span className="flex items-center gap-1.5"><Icon name="MapPin" size={12}/> {ev.location || "Sede"}</span>
                                         </div>
-                                        
+                                       
                                         {isUserEscalated && (
                                             <div className="text-purple-600 text-[10px] font-bold uppercase flex items-center justify-center md:justify-start gap-1">
                                                 <Icon name="Briefcase" size={12}/> 
                                                 Escalado em: {myAtt.servingDept}
                                             </div>
                                         )}
-                                        
+                                       
                                         {ev.deadline && (
                                             <div className="text-[9px] text-red-400 font-bold uppercase">
                                                 Prazo Disp.: {new Date(ev.deadline).toLocaleString()} 
@@ -496,7 +496,7 @@
                                                         ? (isUserEscalated ? (myAtt.role ? `Função: ${myAtt.role}` : 'Escalado') : myAtt.servingDept) 
                                                         : 'Indisponível'}
                                                 </span>
-                                                
+                                                 
                                                 {/* Check-in Status */}
                                                 {isCheckinOpen && (
                                                     <button onClick={() => setCheckinEvent(ev)} className="flex items-center gap-1 bg-orange-100 text-orange-600 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-orange-200 transition animate-bounce">
@@ -584,7 +584,7 @@
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date + 'T12:00:00');
-               
+              
                 const catMatch = ev.category === filterCategory || (!ev.category && filterCategory === 'Agenda Ministerial');
                 const yearMatch = d.getFullYear() === Number(filterYear);
                 const monthMatch = d.getMonth() === Number(filterMonth);
@@ -599,7 +599,7 @@
                 <div className="space-y-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Ver Escala Publicada</h1>
-                          
+                        
                         <div className="flex flex-col md:flex-row gap-4 items-end w-full md:w-auto no-print">
                             <button onClick={() => window.print()} className="bg-gray-800 text-white px-4 py-2 rounded-xl font-bold uppercase text-[10px] flex items-center gap-2 hover:bg-gray-700 transition shadow-lg shadow-gray-200">
                                 <Icon name="Printer" size={16} /> Imprimir / Salvar PDF
@@ -636,7 +636,7 @@
                             const pStyle = getPeriodStyle(ev.period);
                             // Get escalated volunteers for this event
                             const escalated = attendance.filter(a => a.eventId === ev.id && a.isEscalated);
-                            
+                           
                             // Group by Dept
                             const byDept = {};
                             departments.forEach(d => {
@@ -773,7 +773,7 @@
                     deptCounts[a.servingDept] = (deptCounts[a.servingDept] || 0) + 1;
                 });
                 const sortedDepts = Object.entries(deptCounts).sort((a,b) => b[1] - a[1]);
-            
+              
                 return { avail, unavail, escalated, lates, absents, topDepts: sortedDepts };
             };
 
@@ -792,11 +792,11 @@
                 const lates = deptAtts.filter(a => a.attendanceStatus === 'late').length;
 
                 const absents = deptAtts.filter(a => {
-                    if (!a.isEscalated) return false;
-                    const passed = new Date() > new Date(a.eventDate + 'T23:59:59');
-                    if (!a.hasCheckedIn && passed) return true;
-                    if (a.attendanceStatus === 'absent') return true;
-                    return false;
+                     if (!a.isEscalated) return false;
+                     const passed = new Date() > new Date(a.eventDate + 'T23:59:59');
+                     if (!a.hasCheckedIn && passed) return true;
+                     if (a.attendanceStatus === 'absent') return true;
+                     return false;
                 }).length;
 
                 return { avail, unavail, escalated, lates, absents };
@@ -808,7 +808,7 @@
             return (
                 <div className="space-y-8">
                     <FilterHeader title={title} month={month} setMonth={setMonth} year={year} setYear={setYear} />
-                    
+                   
                     {/* Pesquisa Voluntário */}
                     <div className="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4">
                         <h3 className="font-black uppercase text-gray-800">Pesquisar Voluntários</h3>
@@ -1053,7 +1053,7 @@
                                 <label className="text-[10px] font-black text-gray-400 uppercase">Prazo para Disponibilidade</label>
                                 <input type="datetime-local" value={form.deadline} onChange={e => setForm({...form, deadline: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
                             </div>
-                            
+                           
                             <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-gray-100 pt-4">
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-1"><Icon name="QrCode" size={12}/> Código de Check-in</label>
@@ -1128,13 +1128,13 @@
             const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
             const [filterYear, setFilterYear] = useState(new Date().getFullYear());
             const [filterCategory, setFilterCategory] = useState('all');
-            
+           
             const [statsModalEvent, setStatsModalEvent] = useState(null);
             const [statsTab, setStatsTab] = useState('present'); 
             const [scaleModalEvent, setScaleModalEvent] = useState(null);
             const [scaleModalDept, setScaleModalDept] = useState(null);
             const [expandedVolunteer, setExpandedVolunteer] = useState(null);
-            
+           
             const [checkinReportEvent, setCheckinReportEvent] = useState(null);
 
             const filteredEvents = useMemo(() => events.filter(ev => {
@@ -1149,7 +1149,7 @@
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', event.id), { scaleStatus: newStatus }); 
                 showToast(`Escala ${newStatus === 'ready' ? 'publicada' : 'ocultada'}!`); 
             };
-            
+           
             const toggleEscalation = async (att, role = null) => { 
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', att.id), { 
                     isEscalated: !att.isEscalated,
@@ -1181,7 +1181,7 @@
                 const eventAtts = attendance.filter(a => a.eventId === eventId);
                 const present = eventAtts.filter(a => a.status === 'present');
                 const absent = eventAtts.filter(a => a.status === 'absent');
-            
+              
                 const respondedIds = eventAtts.map(a => a.userId);
                 const pendingUsers = users.filter(u => !respondedIds.includes(u.uid) && u.role !== 'master');
 
@@ -1227,7 +1227,7 @@
                     <div className="space-y-4">
                         {filteredEvents.map(ev => {
                             const { present, absent, pendingUsers } = getEventLists(ev.id);
-                            
+                           
                             // Date formatting for Admin Scale View
                             const dateObj = new Date(ev.date + 'T12:00:00');
                             const weekDay = dateObj.toLocaleDateString('pt-BR', { weekday: 'long' });
@@ -1366,7 +1366,7 @@
                                                     ))}
                                                     {data.present.length === 0 && <span className="text-[9px] text-green-300 italic">Ninguém</span>}
                                                 </div>
-                                                 
+                                                
                                                 {/* Atrasados */}
                                                 <div className="bg-yellow-50 p-2 rounded-xl">
                                                     <p className="text-[9px] font-black text-yellow-600 uppercase mb-1">Atrasados ({data.late.length})</p>
@@ -1581,7 +1581,7 @@
                     
                     <div className="space-y-4">
                         <button onClick={openNewUser} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-purple-100 hover:bg-purple-700 transition flex items-center justify-center gap-2"><Icon name="Plus" size={16} /> Adicionar Novo Membro</button>
-                          
+                        
                         {/* Search Bar */}
                         <div className="relative">
                             <Icon name="Search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1750,7 +1750,7 @@
             if (userData.status === 'blocked') return <BlockedScreen onLogout={handleLogout} />;
 
             const isAdmin = userData.role === 'admin' || userData.role === 'master';
-            const isLeader = userData.name === "Lider" || userData.name === "Liderança";
+            const isLeader = userData.name === "Liderança"; // Identifica usuário Liderança
 
             return (
                 <div className="flex min-h-screen bg-gray-50 text-gray-800 font-sans selection:bg-primary/20">
@@ -1798,11 +1798,11 @@
                         )}
                         </div></div></div>)}
                     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-2 pb-safe flex justify-around items-center z-50 no-print shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                             <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}><Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /><span className="text-[9px] font-bold">Painel</span></button>
-                             <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} /><span className="text-[9px] font-bold">Agenda</span></button>
-                             <button onClick={() => setView('congressos')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'congressos' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Trophy" size={20} strokeWidth={view === 'congressos' ? 2.5 : 2} /><span className="text-[9px] font-bold">Congressos</span></button>
-                             <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>
-                             <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400"><Icon name="LogOut" size={20} /><span className="text-[9px] font-bold">Sair</span></button>
+                         <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}><Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /><span className="text-[9px] font-bold">Painel</span></button>
+                         <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} /><span className="text-[9px] font-bold">Agenda</span></button>
+                         <button onClick={() => setView('congressos')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'congressos' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Trophy" size={20} strokeWidth={view === 'congressos' ? 2.5 : 2} /><span className="text-[9px] font-bold">Congressos</span></button>
+                         <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>
+                         <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400"><Icon name="LogOut" size={20} /><span className="text-[9px] font-bold">Sair</span></button>
                     </div>
                     <main className={`flex-1 md:ml-72 p-4 md:p-12 mb-24 md:mb-0 max-w-7xl mx-auto w-full ${isAdmin ? 'mt-16 md:mt-0' : ''}`}>
                         {view === 'dashboard' && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}

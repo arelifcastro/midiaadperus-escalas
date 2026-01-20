@@ -73,8 +73,9 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Configuration ---
+        // Use environment provided config or fallback
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "AIzaSyChhzYn6FhzGb7D5mggYeZFI9eW2mIJgro",
+            apiKey: "", // Placeholder - Execution environment will handle this if needed
             authDomain: "midia-adperus-escalas.firebaseapp.com",
             projectId: "midia-adperus-escalas",
             storageBucket: "midia-adperus-escalas.appspot.com",
@@ -94,20 +95,37 @@
         // --- Utilities ---
         const Icon = ({ name, size = 20, className = "", strokeWidth = 2.5, style = {} }) => {
             const containerRef = useRef(null);
+            
             useEffect(() => {
                 if (containerRef.current && window.lucide) {
                     containerRef.current.innerHTML = "";
-                    const iconElement = document.createElement("i");
-                    const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
-                    iconElement.setAttribute("data-lucide", kebabName);
-                    containerRef.current.appendChild(iconElement);
+                    
+                    // Convert PascalCase to kebab-case for data-lucide attribute (standard way)
+                    // Or directly use createIcons with the specific icon name if available
+                    
+                    const iconNameKebab = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+                    const iElement = document.createElement("i");
+                    iElement.setAttribute("data-lucide", iconNameKebab);
+                    
+                    // Apply classes and styles
+                    if(className) iElement.className = className;
+                    
+                    containerRef.current.appendChild(iElement);
+                    
                     window.lucide.createIcons({
-                        attrs: { width: size, height: size, "stroke-width": strokeWidth, class: className, style: style },
+                        attrs: { 
+                            width: size, 
+                            height: size, 
+                            "stroke-width": strokeWidth,
+                            style: style
+                        },
+                        nameAttr: 'data-lucide',
                         root: containerRef.current
                     });
                 }
             }, [name, size, className, strokeWidth, style]);
-            return <span ref={containerRef} className="inline-flex items-center justify-center leading-none" style={style}></span>;
+
+            return <span ref={containerRef} className={`inline-flex items-center justify-center ${className}`} style={style}></span>;
         };
 
         const CustomStyles = ({ primaryColor }) => (
@@ -368,7 +386,7 @@
                 const now = new Date();
                 const deadline1 = checkinEvent.checkinDeadline ? new Date(checkinEvent.checkinDeadline) : null;
                 const deadline2 = checkinEvent.checkinDeadline2 ? new Date(checkinEvent.checkinDeadline2) : null;
-               
+                
                 // Se já passou do prazo 2, não permite check-in (Ausente)
                 if (deadline2 && now > deadline2) {
                     showToast("Prazo expirado. Contabilizado como Ausente.");
@@ -397,13 +415,13 @@
                         checkinTime: new Date().toISOString(),
                         attendanceStatus: attendanceStatus
                     });
-                   
+                    
                     if (attendanceStatus === 'late') {
                         showToast("Check-in realizado com atraso.");
                     } else {
                         showToast("Check-in realizado com sucesso!");
                     }
-                   
+                    
                     setCheckinEvent(null);
                     setCheckinCode("");
                 } catch (err) {
@@ -599,7 +617,7 @@
                 <div className="space-y-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Ver Escala Publicada</h1>
-                         
+                          
                         <div className="flex flex-col md:flex-row gap-4 items-end w-full md:w-auto no-print">
                             <button onClick={() => window.print()} className="bg-gray-800 text-white px-4 py-2 rounded-xl font-bold uppercase text-[10px] flex items-center gap-2 hover:bg-gray-700 transition shadow-lg shadow-gray-200">
                                 <Icon name="Printer" size={16} /> Imprimir / Salvar PDF
@@ -740,7 +758,7 @@
 
             const getVolunteerStats = (userId, m, y, d) => {
                 let userAtt = attendance.filter(a => a.userId === userId); 
-               
+                
                 userAtt = userAtt.filter(a => {
                     const evtDate = new Date(a.eventDate);
                     const sameMonth = evtDate.getUTCMonth() === Number(m);
@@ -753,7 +771,7 @@
                 const unavail = userAtt.filter(a => a.status === 'absent').length;
                 const escalated = userAtt.filter(a => a.isEscalated).length;
                 const lates = userAtt.filter(a => a.attendanceStatus === 'late').length;
-               
+                
                 // Ausente = Escalado e (Status Absent OU (Não Checkin e Data Passou))
                 // Simplificação: Se está 'late', não conta 'absent'.
                 // Se está 'present' (Checkin OK), não conta 'absent'.
@@ -785,7 +803,7 @@
                            evtDate.getUTCFullYear() === Number(y) &&
                            (d ? evtDate.getUTCDate() === Number(d) : true);
                 });
-               
+                
                 const avail = deptAtts.filter(a => a.status === 'present').length;
                 const unavail = deptAtts.filter(a => a.status === 'absent').length;
                 const escalated = deptAtts.filter(a => a.isEscalated).length;
@@ -1189,7 +1207,7 @@
                 const grouped = {};
                 escalated.forEach(a => {
                     if (!grouped[a.servingDept]) grouped[a.servingDept] = { present: [], late: [], absent: [] };
-                   
+                    
                     if (a.attendanceStatus === 'late') {
                         grouped[a.servingDept].late.push(a);
                     } else if (a.hasCheckedIn || a.attendanceStatus === 'present') {
@@ -1555,8 +1573,24 @@
                 e.preventDefault();
                 try {
                     const uid = editingUser ? editingUser.uid : userForm.name.trim().toLowerCase().replace(/\s+/g, '_');
-                    const userData = { name: userForm.name, username: userForm.name, password: userForm.password, unitType: userForm.unitType, unitName: userForm.unitName, participatingDepts: userForm.departments, role: 'user', status: 'active', updatedAt: new Date().toISOString() };
+                    
+                    // Important fix: Preserve role if editing existing user, otherwise default to 'user'
+                    const userRole = editingUser ? (editingUser.role || 'user') : 'user';
+                    
+                    const userData = { 
+                        name: userForm.name, 
+                        username: userForm.name, 
+                        password: userForm.password, 
+                        unitType: userForm.unitType, 
+                        unitName: userForm.unitName, 
+                        participatingDepts: userForm.departments, 
+                        role: userRole, 
+                        status: 'active', 
+                        updatedAt: new Date().toISOString() 
+                    };
+                    
                     if (!editingUser) userData.createdAt = new Date().toISOString();
+                    
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uid), userData, { merge: true });
                     setIsUserModalOpen(false); setEditingUser(null); setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [] });
                     showToast(editingUser ? "Membro atualizado!" : "Membro adicionado!");
@@ -1718,7 +1752,7 @@
                         initialUsers.forEach(u => { 
                             const id = u.name.trim().toLowerCase().replace(/\s+/g, '_'); 
                             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id); 
-                            batch.set(docRef, { 
+                            const userDataToSave = { 
                                 name: u.name, 
                                 username: u.name, 
                                 password: u.pass, 
@@ -1728,7 +1762,10 @@
                                 unitName: 'Sede', 
                                 participatingDepts: [], 
                                 createdAt: new Date().toISOString() 
-                            }); 
+                            };
+                            if(u.specialRole) userDataToSave.specialRole = u.specialRole;
+
+                            batch.set(docRef, userDataToSave); 
                         }); 
                         await batch.commit(); 
                     } 
@@ -1746,7 +1783,8 @@
             if (userData.status === 'blocked') return <BlockedScreen onLogout={handleLogout} />;
 
             const isAdmin = userData.role === 'admin' || userData.role === 'master';
-            const isLeader = userData.name === "Liderança"; // Identifica usuário Liderança
+            // Adjusted logic to detect Leader based on specialRole OR exact name matches
+            const isLeader = userData.specialRole === 'leader' || userData.name === "Liderança" || userData.name === "Lider";
 
             return (
                 <div className="flex min-h-screen bg-gray-50 text-gray-800 font-sans selection:bg-primary/20">

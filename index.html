@@ -73,9 +73,8 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Configuration ---
-        // Use environment provided config or fallback
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "", // Placeholder - Execution environment will handle this if needed
+            apiKey: "AIzaSyChhzYn6FhzGb7D5mggYeZFI9eW2mIJgro",
             authDomain: "midia-adperus-escalas.firebaseapp.com",
             projectId: "midia-adperus-escalas",
             storageBucket: "midia-adperus-escalas.appspot.com",
@@ -95,37 +94,20 @@
         // --- Utilities ---
         const Icon = ({ name, size = 20, className = "", strokeWidth = 2.5, style = {} }) => {
             const containerRef = useRef(null);
-            
             useEffect(() => {
                 if (containerRef.current && window.lucide) {
                     containerRef.current.innerHTML = "";
-                    
-                    // Convert PascalCase to kebab-case for data-lucide attribute (standard way)
-                    // Or directly use createIcons with the specific icon name if available
-                    
-                    const iconNameKebab = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
-                    const iElement = document.createElement("i");
-                    iElement.setAttribute("data-lucide", iconNameKebab);
-                    
-                    // Apply classes and styles
-                    if(className) iElement.className = className;
-                    
-                    containerRef.current.appendChild(iElement);
-                    
+                    const iconElement = document.createElement("i");
+                    const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+                    iconElement.setAttribute("data-lucide", kebabName);
+                    containerRef.current.appendChild(iconElement);
                     window.lucide.createIcons({
-                        attrs: { 
-                            width: size, 
-                            height: size, 
-                            "stroke-width": strokeWidth,
-                            style: style
-                        },
-                        nameAttr: 'data-lucide',
+                        attrs: { width: size, height: size, "stroke-width": strokeWidth, class: className, style: style },
                         root: containerRef.current
                     });
                 }
             }, [name, size, className, strokeWidth, style]);
-
-            return <span ref={containerRef} className={`inline-flex items-center justify-center ${className}`} style={style}></span>;
+            return <span ref={containerRef} className="inline-flex items-center justify-center leading-none" style={style}></span>;
         };
 
         const CustomStyles = ({ primaryColor }) => (
@@ -347,7 +329,7 @@
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date);
-            
+                
                 if (showEscalatedOnly) {
                     const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
                     const isDateMatch = d.getUTCMonth() === Number(filterMonth) && d.getUTCFullYear() === Number(filterYear);
@@ -355,13 +337,13 @@
                 }
 
                 if (d.getUTCMonth() !== Number(filterMonth) || d.getUTCFullYear() !== Number(filterYear)) return false;
-            
+                
                 const isCorrectCategory = category === "Agenda Ministerial" 
                     ? (!ev.category || ev.category === "Agenda Ministerial") 
                     : ev.category === category;
-            
+                
                 if (!isCorrectCategory) return false;
-            
+                
                 const dayOfWeek = d.getUTCDay(); 
                 if (dayFilter === 'week' && (dayOfWeek === 0 || dayOfWeek === 6)) return false;
                 if (dayFilter === 'saturday' && dayOfWeek !== 6) return false;
@@ -386,7 +368,7 @@
                 const now = new Date();
                 const deadline1 = checkinEvent.checkinDeadline ? new Date(checkinEvent.checkinDeadline) : null;
                 const deadline2 = checkinEvent.checkinDeadline2 ? new Date(checkinEvent.checkinDeadline2) : null;
-                
+               
                 // Se já passou do prazo 2, não permite check-in (Ausente)
                 if (deadline2 && now > deadline2) {
                     showToast("Prazo expirado. Contabilizado como Ausente.");
@@ -602,7 +584,7 @@
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date + 'T12:00:00');
-            
+                
                 const catMatch = ev.category === filterCategory || (!ev.category && filterCategory === 'Agenda Ministerial');
                 const yearMatch = d.getFullYear() === Number(filterYear);
                 const monthMatch = d.getMonth() === Number(filterMonth);
@@ -617,7 +599,7 @@
                 <div className="space-y-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Ver Escala Publicada</h1>
-                          
+                         
                         <div className="flex flex-col md:flex-row gap-4 items-end w-full md:w-auto no-print">
                             <button onClick={() => window.print()} className="bg-gray-800 text-white px-4 py-2 rounded-xl font-bold uppercase text-[10px] flex items-center gap-2 hover:bg-gray-700 transition shadow-lg shadow-gray-200">
                                 <Icon name="Printer" size={16} /> Imprimir / Salvar PDF
@@ -758,7 +740,7 @@
 
             const getVolunteerStats = (userId, m, y, d) => {
                 let userAtt = attendance.filter(a => a.userId === userId); 
-                
+               
                 userAtt = userAtt.filter(a => {
                     const evtDate = new Date(a.eventDate);
                     const sameMonth = evtDate.getUTCMonth() === Number(m);
@@ -771,7 +753,7 @@
                 const unavail = userAtt.filter(a => a.status === 'absent').length;
                 const escalated = userAtt.filter(a => a.isEscalated).length;
                 const lates = userAtt.filter(a => a.attendanceStatus === 'late').length;
-                
+               
                 // Ausente = Escalado e (Status Absent OU (Não Checkin e Data Passou))
                 // Simplificação: Se está 'late', não conta 'absent'.
                 // Se está 'present' (Checkin OK), não conta 'absent'.
@@ -803,18 +785,18 @@
                            evtDate.getUTCFullYear() === Number(y) &&
                            (d ? evtDate.getUTCDate() === Number(d) : true);
                 });
-                
+               
                 const avail = deptAtts.filter(a => a.status === 'present').length;
                 const unavail = deptAtts.filter(a => a.status === 'absent').length;
                 const escalated = deptAtts.filter(a => a.isEscalated).length;
                 const lates = deptAtts.filter(a => a.attendanceStatus === 'late').length;
 
                 const absents = deptAtts.filter(a => {
-                     if (!a.isEscalated) return false;
-                     const passed = new Date() > new Date(a.eventDate + 'T23:59:59');
-                     if (!a.hasCheckedIn && passed) return true;
-                     if (a.attendanceStatus === 'absent') return true;
-                     return false;
+                    if (!a.isEscalated) return false;
+                    const passed = new Date() > new Date(a.eventDate + 'T23:59:59');
+                    if (!a.hasCheckedIn && passed) return true;
+                    if (a.attendanceStatus === 'absent') return true;
+                    return false;
                 }).length;
 
                 return { avail, unavail, escalated, lates, absents };
@@ -1185,7 +1167,11 @@
                     };
                     if (newStatus !== 'absent') {
                          updates.checkinTime = new Date().toISOString();
+                    } else {
+                         // Remove checkin time if marking as absent manually? Or keep history?
+                         // Keeping simple for now
                     }
+
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), updates);
                     showToast(`Status atualizado para ${newStatus}.`);
                 } catch(e) { console.error(e); }
@@ -1207,7 +1193,7 @@
                 const grouped = {};
                 escalated.forEach(a => {
                     if (!grouped[a.servingDept]) grouped[a.servingDept] = { present: [], late: [], absent: [] };
-                    
+                   
                     if (a.attendanceStatus === 'late') {
                         grouped[a.servingDept].late.push(a);
                     } else if (a.hasCheckedIn || a.attendanceStatus === 'present') {
@@ -1573,24 +1559,8 @@
                 e.preventDefault();
                 try {
                     const uid = editingUser ? editingUser.uid : userForm.name.trim().toLowerCase().replace(/\s+/g, '_');
-                    
-                    // Important fix: Preserve role if editing existing user, otherwise default to 'user'
-                    const userRole = editingUser ? (editingUser.role || 'user') : 'user';
-                    
-                    const userData = { 
-                        name: userForm.name, 
-                        username: userForm.name, 
-                        password: userForm.password, 
-                        unitType: userForm.unitType, 
-                        unitName: userForm.unitName, 
-                        participatingDepts: userForm.departments, 
-                        role: userRole, 
-                        status: 'active', 
-                        updatedAt: new Date().toISOString() 
-                    };
-                    
+                    const userData = { name: userForm.name, username: userForm.name, password: userForm.password, unitType: userForm.unitType, unitName: userForm.unitName, participatingDepts: userForm.departments, role: 'user', status: 'active', updatedAt: new Date().toISOString() };
                     if (!editingUser) userData.createdAt = new Date().toISOString();
-                    
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uid), userData, { merge: true });
                     setIsUserModalOpen(false); setEditingUser(null); setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [] });
                     showToast(editingUser ? "Membro atualizado!" : "Membro adicionado!");
@@ -1611,7 +1581,7 @@
                     
                     <div className="space-y-4">
                         <button onClick={openNewUser} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-purple-100 hover:bg-purple-700 transition flex items-center justify-center gap-2"><Icon name="Plus" size={16} /> Adicionar Novo Membro</button>
-                        
+                         
                         {/* Search Bar */}
                         <div className="relative">
                             <Icon name="Search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1752,7 +1722,7 @@
                         initialUsers.forEach(u => { 
                             const id = u.name.trim().toLowerCase().replace(/\s+/g, '_'); 
                             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id); 
-                            const userDataToSave = { 
+                            batch.set(docRef, { 
                                 name: u.name, 
                                 username: u.name, 
                                 password: u.pass, 
@@ -1762,10 +1732,7 @@
                                 unitName: 'Sede', 
                                 participatingDepts: [], 
                                 createdAt: new Date().toISOString() 
-                            };
-                            if(u.specialRole) userDataToSave.specialRole = u.specialRole;
-
-                            batch.set(docRef, userDataToSave); 
+                            }); 
                         }); 
                         await batch.commit(); 
                     } 
@@ -1783,8 +1750,7 @@
             if (userData.status === 'blocked') return <BlockedScreen onLogout={handleLogout} />;
 
             const isAdmin = userData.role === 'admin' || userData.role === 'master';
-            // Adjusted logic to detect Leader based on specialRole OR exact name matches
-            const isLeader = userData.specialRole === 'leader' || userData.name === "Liderança" || userData.name === "Lider";
+            const isLeader = userData.name === "Lider" || userData.name === "Liderança";
 
             return (
                 <div className="flex min-h-screen bg-gray-50 text-gray-800 font-sans selection:bg-primary/20">
@@ -1797,11 +1763,11 @@
                             <NavItem active={view === 'congressos'} iconName="Trophy" label={appSettings.tabNames.congressos} onClick={() => setView('congressos')} open={true} />
                             <NavItem active={view === 'depts'} iconName="Briefcase" label={appSettings.tabNames.departments} onClick={() => setView('depts')} open={true} />
                             {isAdmin && (<><div className="my-6 border-t border-gray-100"></div><p className="px-4 text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
-                             
+                            
                             {!isLeader && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => setView('create_events')} open={true} />}
-                             
+                            
                             <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => setView('manage_scales')} open={true} />
-                             
+                            
                             {!isLeader && (
                                 <>
                                     <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => setView('view_scale')} open={true} />
@@ -1832,11 +1798,11 @@
                         )}
                         </div></div></div>)}
                     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-2 pb-safe flex justify-around items-center z-50 no-print shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                         <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}><Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /><span className="text-[9px] font-bold">Painel</span></button>
-                         <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} /><span className="text-[9px] font-bold">Agenda</span></button>
-                         <button onClick={() => setView('congressos')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'congressos' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Trophy" size={20} strokeWidth={view === 'congressos' ? 2.5 : 2} /><span className="text-[9px] font-bold">Congressos</span></button>
-                         <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>
-                         <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400"><Icon name="LogOut" size={20} /><span className="text-[9px] font-bold">Sair</span></button>
+                             <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}><Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /><span className="text-[9px] font-bold">Painel</span></button>
+                             <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} /><span className="text-[9px] font-bold">Agenda</span></button>
+                             <button onClick={() => setView('congressos')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'congressos' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Trophy" size={20} strokeWidth={view === 'congressos' ? 2.5 : 2} /><span className="text-[9px] font-bold">Congressos</span></button>
+                             <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>
+                             <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400"><Icon name="LogOut" size={20} /><span className="text-[9px] font-bold">Sair</span></button>
                     </div>
                     <main className={`flex-1 md:ml-72 p-4 md:p-12 mb-24 md:mb-0 max-w-7xl mx-auto w-full ${isAdmin ? 'mt-16 md:mt-0' : ''}`}>
                         {view === 'dashboard' && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}

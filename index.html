@@ -1559,7 +1559,21 @@
                 e.preventDefault();
                 try {
                     const uid = editingUser ? editingUser.uid : userForm.name.trim().toLowerCase().replace(/\s+/g, '_');
-                    const userData = { name: userForm.name, username: userForm.name, password: userForm.password, unitType: userForm.unitType, unitName: userForm.unitName, participatingDepts: userForm.departments, role: 'user', status: 'active', updatedAt: new Date().toISOString() };
+                    
+                    // CORRECTION: Preserve existing role if editing, otherwise default to 'user'
+                    const currentRole = editingUser ? editingUser.role : 'user';
+
+                    const userData = { 
+                        name: userForm.name, 
+                        username: userForm.name, 
+                        password: userForm.password, 
+                        unitType: userForm.unitType, 
+                        unitName: userForm.unitName, 
+                        participatingDepts: userForm.departments, 
+                        role: currentRole, 
+                        status: 'active', 
+                        updatedAt: new Date().toISOString() 
+                    };
                     if (!editingUser) userData.createdAt = new Date().toISOString();
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uid), userData, { merge: true });
                     setIsUserModalOpen(false); setEditingUser(null); setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [] });
@@ -1698,6 +1712,23 @@
             useEffect(() => { if (!firebaseUser) return; const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (docSnap) => { if (docSnap.exists()) { setAppSettings(prev => ({ ...prev, ...docSnap.data() })); } }); return () => unsubSettings(); }, [firebaseUser]);
             const handleUpdateSettings = async (newSettings) => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), newSettings, { merge: true }); setToastMsg("Configurações salvas!"); } catch (e) { console.error(e); setToastMsg("Erro ao salvar."); } };
             
+            // Self-heal Master Role Logic
+            useEffect(() => {
+                if (!firebaseUser) return;
+                const enforceMasterPrivileges = async () => {
+                    try {
+                        const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master');
+                        const docSnap = await getDoc(masterRef);
+                        // If master exists but has wrong role, fix it
+                        if (docSnap.exists() && docSnap.data().role !== 'master') {
+                             await updateDoc(masterRef, { role: 'master' });
+                             console.log("Permissões de Master restauradas.");
+                        }
+                    } catch(e) { console.error(e); }
+                };
+                enforceMasterPrivileges();
+            }, [firebaseUser]);
+
             useEffect(() => { 
                 if (!firebaseUser) return; 
                 const seedData = async () => { 

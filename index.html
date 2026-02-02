@@ -4,33 +4,52 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mídia ADPerus</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone@7.23.12/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        
+        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Animation Utilities */
         .animate-in { animation: fadeIn 0.3s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Safe Area for Mobile */
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 80px); }
+
+        /* Print Styles */
         @media print {
             @page { margin: 1cm; size: A4; }
             .no-print { display: none !important; }
             aside, header, button, .modal-overlay, .toast-container, nav { display: none !important; }
             main { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; overflow: visible !important; }
             body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .card-print { break-inside: avoid; page-break-inside: avoid; margin-bottom: 20px; border: 1px solid #eee !important; box-shadow: none !important; background-color: white !important; }
+            
+            /* Card Breaks */
+            .card-print { 
+                break-inside: avoid; 
+                page-break-inside: avoid; 
+                margin-bottom: 20px; 
+                border: 1px solid #eee !important;
+                box-shadow: none !important;
+                background-color: white !important;
+            }
+
+            /* Adjust Colors for Print */
             .text-white { color: black !important; }
             .bg-primary { background-color: #eee !important; color: black !important; }
             .bg-gray-50 { background-color: #f8f8f8 !important; }
@@ -40,11 +59,21 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script type="text/babel" data-type="module">
         const { useState, useEffect, useMemo, useRef } = React;
 
+        // --- Firebase Imports ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signOut 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, doc, setDoc, updateDoc, collection, onSnapshot, 
+            addDoc, deleteDoc, getDoc, writeBatch 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
         // --- Configuration ---
-        const firebaseConfig = {
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "AIzaSyChhzYn6FhzGb7D5mggYeZFI9eW2mIJgro",
             authDomain: "midia-adperus-escalas.firebaseapp.com",
             projectId: "midia-adperus-escalas",
@@ -53,16 +82,16 @@
             appId: "1:425939380478:web:81ffd64a27468cb43a5daf"
         };
 
-        // Inicialização usando a sintaxe Compat (evita erros de import/export no navegador)
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        const appId = 'default-app-id';
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-        // --- Constantes e Utilitários ---
+        // --- Constants ---
         const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
         const YEARS = [2024, 2025, 2026, 2027];
-
+        
+        // --- Utilities ---
         const Icon = ({ name, size = 20, className = "", strokeWidth = 2.5, style = {} }) => {
             const containerRef = useRef(null);
             useEffect(() => {
@@ -93,7 +122,6 @@
             `}</style>
         );
 
-        // --- Componentes de UI ---
         const Toast = ({ message, onClose }) => {
             useEffect(() => {
                 const timer = setTimeout(onClose, 3000);
@@ -123,11 +151,6 @@
             </div>
         );
 
-        // ... [RESTANTE DAS FUNÇÕES DE VIEW: DashboardView, AgendaView, etc, mantidas idênticas] ...
-        // Nota: Por brevidade, incluirei a lógica principal e o App. Todas as suas Views originais 
-        // devem ser coladas aqui sem alteração, apenas garantindo que usem 'db' e 'auth' criados acima.
-
-        // Replicando as funções auxiliares que você já tinha:
         const getPeriodStyle = (period) => {
             switch(period) {
                 case 'Manhã': return { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: 'Sun' };
@@ -174,10 +197,8 @@
             );
         }
 
-        // [AQUI VOCÊ DEVE MANTER AS VIEWS: DashboardView, AgendaView, ViewScaleView, UserDepartments, ReportsView, AdminCreateEventsView, AdminScalesView, AdminDepartmentsView, AdminTeamView, MasterSettingsView, BlockedScreen e AuthScreen QUE JÁ ESTAVAM NO SEU CÓDIGO ORIGINAL]
-        // ... (Para economizar espaço na resposta, estou omitindo a repetição exata das views, mas elas permanecem as mesmas que você postou) ...
-        
-        // --- Componentes de Tela (Resumidos para exemplo, use os seus originais) ---
+        // --- Screens ---
+
         function BlockedScreen({ onLogout }) {
             return (
                 <div className="h-screen bg-red-50 flex items-center justify-center p-6 text-center">
@@ -191,13 +212,1487 @@
             );
         }
 
-        // [COLE AQUI TODAS AS SUAS FUNCTIONS DE VIEW DO CÓDIGO ANTERIOR]
-        // Apenas certifique-se de que onde dizia: 
-        // "await updateDoc(doc(db, ...))" 
-        // Agora você pode usar o db.collection('artifacts').doc(appId)... conforme o padrão Compat se necessário, 
-        // mas o Firebase Compat aceita as chamadas que você já tinha se você usar a sintaxe correta.
+        function AuthScreen({ onLogin, error, isProcessing, settings }) {
+            const bannerBg = settings.loginBannerUrl 
+                ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), url(${settings.loginBannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                : { backgroundColor: settings.primaryColor || '#3b82f6' };
 
-        // --- COMPONENTE APP PRINCIPAL (CORRIGIDO) ---
+            return (
+                <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+                    <CustomStyles primaryColor={settings.primaryColor} />
+                    <div className="max-w-4xl w-full bg-white rounded-[2rem] md:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row border border-gray-100">
+                        <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center relative overflow-hidden text-center transition-all duration-700" style={bannerBg}>
+                            <div className="relative z-10">
+                                <div className="w-20 h-20 md:w-24 md:h-24 mx-auto mb-6 bg-white/10 rounded-full flex items-center justify-center overflow-hidden border-2 border-white/20">
+                                    {settings.logoUrl ? <img src={settings.logoUrl} className="w-full h-full object-cover" /> : <Icon name="Crown" size={48} className="opacity-80 text-white" />}
+                                </div>
+                                <h1 className="text-3xl md:text-4xl font-black mb-2 uppercase leading-none tracking-tighter text-white drop-shadow-lg">
+                                    {settings.loginTitle || "Mídia ADPerus"}
+                                </h1>
+                                <p className="text-white/80 font-bold text-[10px] md:text-xs uppercase tracking-widest mt-4">Acesso Voluntários</p>
+                            </div>
+                        </div>
+                        <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
+                            
+                            <form onSubmit={onLogin} className="space-y-4">
+                                <div className="space-y-4 animate-in">
+                                    <div className="relative">
+                                        <Icon name="User" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input name="username" placeholder="Usuário" required className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 transition text-gray-800" />
+                                    </div>
+                                    <div className="relative">
+                                        <Icon name="Lock" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input name="password" type="password" placeholder="Senha" required className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 transition text-gray-800" />
+                                    </div>
+                                </div>
+                               
+                                {error && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 animate-in"><Icon name="AlertCircle" size={14}/> {error}</div>}
+                               
+                                <button 
+                                    type="submit" 
+                                    disabled={isProcessing} 
+                                    className={`w-full bg-primary hover:opacity-90 text-white py-5 rounded-[1.5rem] font-black shadow-xl uppercase tracking-widest text-[11px] transition-all active:scale-95 shadow-blue-100 flex items-center justify-center`}
+                                >
+                                    {isProcessing ? "Verificando..." : "Entrar no Portal"}
+                                </button>
+                            </form>
+                            <p className="text-center mt-6 text-[10px] text-gray-400 font-bold uppercase">Problemas com acesso? Procure a liderança.</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Views ---
+
+        function DashboardView({ userProfile, attendance, events, settings }) {
+            const [month, setMonth] = useState(new Date().getMonth());
+            const [year, setYear] = useState(new Date().getFullYear());
+
+            const filteredAtt = useMemo(() => attendance.filter(a => {
+                if (!a.eventDate) return false;
+                const d = new Date(a.eventDate);
+                return a.userId === userProfile.uid && 
+                       d.getUTCMonth() === Number(month) && 
+                       d.getUTCFullYear() === Number(year);
+            }), [attendance, userProfile.uid, month, year]);
+
+            const stats = {
+                available: filteredAtt.filter(a => a.status === 'present').length,
+                unavailable: filteredAtt.filter(a => a.status === 'absent').length,
+                escalated: filteredAtt.filter(a => a.isEscalated).length,
+                pending: events.filter(e => {
+                    const d = new Date(e.date);
+                    return d.getUTCMonth() === Number(month) && d.getUTCFullYear() === Number(year) && new Date() <= new Date(e.date);
+                }).length
+            };
+
+            return (
+                <div className="space-y-6">
+                    <FilterHeader title={`Olá, ${userProfile.name?.split(' ')[0]}`} month={month} setMonth={setMonth} year={year} setYear={setYear} />
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                        <StatCard title="Disponível" value={stats.available} iconName="CheckCircle" iconColor="text-green-500" />
+                        <StatCard title="Indisponível" value={stats.unavailable} iconName="XCircle" iconColor="text-red-500" />
+                        <StatCard title="Escalado" value={stats.escalated} iconName="ClipboardCheck" iconColor="text-purple-500" />
+                        <StatCard title="Eventos Futuros" value={stats.pending} iconName="Clock" iconColor="text-blue-500" />
+                    </div>
+                    <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border shadow-sm">
+                        <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-gray-800"><Icon name="FileText" className="text-primary" /> Histórico</h2>
+                        <div className="divide-y divide-gray-50">
+                            {filteredAtt.map(a => (
+                                <div key={a.id} className="py-4 flex justify-between items-center">
+                                    <div>
+                                        <p className="font-bold uppercase text-[10px] md:text-xs text-gray-800">{a.eventName}</p>
+                                        <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tight">{a.servingDept} • {new Date(a.eventDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
+                                    </div>
+                                    <span className={`px-2 py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase ${a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                        {a.status === 'present' ? "Disponível" : "Ausente"}
+                                    </span>
+                                </div>
+                            ))}
+                            {filteredAtt.length === 0 && <p className="py-10 text-center text-gray-300 font-bold uppercase text-[10px]">Nenhum registro encontrado</p>}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function AgendaView({ events, attendance, userProfile, departments, category, showToast, title }) {
+            const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
+            const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+            const [dayFilter, setDayFilter] = useState('all'); 
+            const [expandedEvent, setExpandedEvent] = useState(null);
+            const [showEscalatedOnly, setShowEscalatedOnly] = useState(false);
+            
+            const [checkinEvent, setCheckinEvent] = useState(null);
+            const [checkinCode, setCheckinCode] = useState("");
+
+            const filteredEvents = useMemo(() => events.filter(ev => {
+                const d = new Date(ev.date);
+                
+                if (showEscalatedOnly) {
+                    const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
+                    const isDateMatch = d.getUTCMonth() === Number(filterMonth) && d.getUTCFullYear() === Number(filterYear);
+                    return isDateMatch && ev.scaleStatus === 'ready' && myAtt?.isEscalated;
+                }
+
+                if (d.getUTCMonth() !== Number(filterMonth) || d.getUTCFullYear() !== Number(filterYear)) return false;
+                
+                const isCorrectCategory = category === "Agenda Ministerial" 
+                    ? (!ev.category || ev.category === "Agenda Ministerial") 
+                    : ev.category === category;
+                
+                if (!isCorrectCategory) return false;
+                
+                const dayOfWeek = d.getUTCDay(); 
+                if (dayFilter === 'week' && (dayOfWeek === 0 || dayOfWeek === 6)) return false;
+                if (dayFilter === 'saturday' && dayOfWeek !== 6) return false;
+                if (dayFilter === 'sunday' && dayOfWeek !== 0) return false;
+
+                return true;
+            }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, filterMonth, filterYear, category, showEscalatedOnly, attendance, userProfile.uid, dayFilter]);
+
+            const respond = async (event, status, deptName = 'INDISPONÍVEL') => {
+                const attId = `${event.id}_${userProfile.uid}`;
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), {
+                    id: attId, eventId: event.id, eventName: event.name, eventDate: event.date, eventCategory: category,
+                    userId: userProfile.uid, userName: userProfile.name, servingDept: deptName,
+                    status: status, isEscalated: false, timestamp: new Date().toISOString()
+                });
+                setExpandedEvent(null);
+                showToast("Resposta salva com sucesso!");
+            };
+
+            const submitCheckin = async () => {
+                if (!checkinEvent) return;
+                const now = new Date();
+                const deadline1 = checkinEvent.checkinDeadline ? new Date(checkinEvent.checkinDeadline) : null;
+                const deadline2 = checkinEvent.checkinDeadline2 ? new Date(checkinEvent.checkinDeadline2) : null;
+               
+                // Se já passou do prazo 2, não permite check-in (Ausente)
+                if (deadline2 && now > deadline2) {
+                    showToast("Prazo expirado. Contabilizado como Ausente.");
+                    return;
+                }
+
+                const codeInput = checkinCode.trim().toUpperCase();
+                const eventCode = (checkinEvent.checkinCode || "").trim().toUpperCase();
+
+                if (codeInput !== eventCode) {
+                    showToast("Código inválido.");
+                    return;
+                }
+
+                let attendanceStatus = 'present'; // Check-in Ok
+                // Se passou do prazo 1 mas está dentro do prazo 2 (ou se não tem prazo 2 mas passou do 1)
+                // A regra: se deadline1 existe e passou -> atrasado.
+                if (deadline1 && now > deadline1) {
+                    attendanceStatus = 'late'; // Check-in Atrasado
+                }
+
+                const attId = `${checkinEvent.id}_${userProfile.uid}`;
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), {
+                        hasCheckedIn: true,
+                        checkinTime: new Date().toISOString(),
+                        attendanceStatus: attendanceStatus
+                    });
+                   
+                    if (attendanceStatus === 'late') {
+                        showToast("Check-in realizado com atraso.");
+                    } else {
+                        showToast("Check-in realizado com sucesso!");
+                    }
+                   
+                    setCheckinEvent(null);
+                    setCheckinCode("");
+                } catch (err) {
+                    console.error(err);
+                    showToast("Erro ao realizar check-in. Tente novamente.");
+                }
+            };
+
+            return (
+                <div className="space-y-6">
+                    <FilterHeader title={title} month={filterMonth} setMonth={setFilterMonth} year={filterYear} setYear={setFilterYear} />
+                    
+                    <div className="flex flex-col md:flex-row justify-between gap-4 no-print">
+                        <div className="flex bg-white p-1 rounded-2xl border shadow-sm overflow-x-auto">
+                            {[{ id: 'all', label: 'Todos' }, { id: 'week', label: 'Semana' }, { id: 'saturday', label: 'Sábado' }, { id: 'sunday', label: 'Domingo' }].map(f => (
+                                <button key={f.id} onClick={() => setDayFilter(f.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${dayFilter === f.id ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-primary'}`}>{f.label}</button>
+                            ))}
+                        </div>
+                        <button onClick={() => setShowEscalatedOnly(!showEscalatedOnly)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl border-2 font-black uppercase text-[10px] transition-all ${showEscalatedOnly ? 'bg-green-600 border-green-600 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-400 hover:border-green-400 hover:text-green-600'}`}>
+                            <Icon name="ClipboardCheck" size={14} />
+                            {showEscalatedOnly ? "Minhas Escalas" : "Ver Minhas Escalas"}
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                        {filteredEvents.map(ev => {
+                            const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
+                            const isReady = ev.scaleStatus === 'ready';
+                            const isUserEscalated = myAtt?.isEscalated && isReady;
+                            const pStyle = getPeriodStyle(ev.period);
+                            
+                            const now = new Date();
+                            const deadlineDate = ev.deadline ? new Date(ev.deadline) : null;
+                            const isExpired = deadlineDate && now > deadlineDate;
+                            
+                            // Check-in logic
+                            // Checkin button logic: Show if escalated, not checked in, and within deadline 2 (or infinite if not set)
+                            const checkinDeadline2 = ev.checkinDeadline2 ? new Date(ev.checkinDeadline2) : null;
+                            const isCheckinExpired = checkinDeadline2 && now > checkinDeadline2;
+                            const isCheckinOpen = isUserEscalated && !myAtt.hasCheckedIn && !isCheckinExpired;
+
+                            return (
+                                <div key={ev.id} className={`bg-white rounded-[2rem] border p-5 shadow-sm transition-all flex flex-col md:flex-row items-center gap-4 md:gap-6 card-print ${isUserEscalated ? 'ring-2 ring-green-500 bg-green-50/10' : 'hover:border-primary/40'}`}>
+                                    {/* Date */}
+                                    <div className="flex flex-row md:flex-col items-center justify-between md:justify-center p-2 md:p-0 w-full md:w-16 text-center shrink-0 border-b md:border-b-0 md:border-none pb-2 md:pb-0">
+                                        <div className="md:hidden text-[10px] font-bold text-gray-400 uppercase">{new Date(ev.date).toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' }).replace('.','')}</div>
+                                        <div className="flex items-center gap-2 md:flex-col md:gap-0 md:items-center">
+                                             <span className="text-[10px] font-black uppercase text-gray-400 md:mb-1">{MONTHS[new Date(ev.date).getUTCMonth()].substring(0,3)}</span>
+                                             <span className={`text-2xl md:text-3xl font-black leading-none ${isUserEscalated ? 'text-green-600' : 'text-gray-800'}`}>{new Date(ev.date).getUTCDate()}</span>
+                                        </div>
+                                        <span className="hidden md:block text-[10px] font-black uppercase mt-1 text-blue-600">
+                                            {new Date(ev.date).toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' }).replace('.','')}
+                                        </span>
+                                    </div>
+
+                                    <div className="hidden md:block w-px h-12 bg-gray-100"></div>
+
+                                    {/* Info */}
+                                    <div className="flex-1 text-center md:text-left space-y-2 w-full">
+                                        <h3 className="text-lg font-black uppercase text-gray-800 leading-tight">{ev.name}</h3>
+                                        <div className="flex flex-wrap gap-2 justify-center md:justify-start text-[10px] font-bold text-gray-400 uppercase">
+                                            <span className="flex items-center gap-1.5 bg-blue-100 text-blue-700 px-2 py-1 rounded"><Icon name="Clock" size={12}/> {ev.time}</span>
+                                            <span className={`flex items-center gap-1.5 px-2 py-1 rounded uppercase text-[9px] ${pStyle.bg} ${pStyle.text}`}>
+                                                <Icon name={pStyle.icon} size={12}/> {ev.period}
+                                            </span>
+                                            <span className="flex items-center gap-1.5"><Icon name="MapPin" size={12}/> {ev.location || "Sede"}</span>
+                                        </div>
+                                       
+                                        {isUserEscalated && (
+                                            <div className="text-purple-600 text-[10px] font-bold uppercase flex items-center justify-center md:justify-start gap-1">
+                                                <Icon name="Briefcase" size={12}/> 
+                                                Escalado em: {myAtt.servingDept}
+                                            </div>
+                                        )}
+                                       
+                                        {ev.deadline && (
+                                            <div className="text-[9px] text-red-400 font-bold uppercase">
+                                                Prazo Disp.: {new Date(ev.deadline).toLocaleString()} 
+                                                {isExpired && !myAtt && <span className="ml-1 bg-red-100 text-red-600 px-1 rounded">Expirado</span>}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Action */}
+                                    <div className="w-full md:w-auto shrink-0 no-print">
+                                        {(myAtt && expandedEvent !== ev.id) ? (
+                                            <div className="flex flex-col items-center md:items-end gap-2">
+                                                <span className={`px-4 py-1.5 rounded-lg font-black uppercase text-[9px] ${myAtt.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                    {myAtt.status === 'present' 
+                                                        ? (isUserEscalated ? (myAtt.role ? `Função: ${myAtt.role}` : 'Escalado') : myAtt.servingDept) 
+                                                        : 'Indisponível'}
+                                                </span>
+                                                 
+                                                {/* Check-in Status */}
+                                                {isCheckinOpen && (
+                                                    <button onClick={() => setCheckinEvent(ev)} className="flex items-center gap-1 bg-orange-100 text-orange-600 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-orange-200 transition animate-bounce">
+                                                        <Icon name="QrCode" size={12} /> Fazer Check-in
+                                                    </button>
+                                                )}
+                                                {myAtt.hasCheckedIn && (
+                                                    <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded ${myAtt.attendanceStatus === 'late' ? 'bg-yellow-100 text-yellow-700' : 'text-green-600'}`}>
+                                                        <Icon name={myAtt.attendanceStatus === 'late' ? "AlertTriangle" : "CheckCheck"} size={12} /> 
+                                                        {myAtt.attendanceStatus === 'late' ? "Check-in Atrasado" : "Check-in Ok"}
+                                                    </span>
+                                                )}
+                                                {!myAtt.hasCheckedIn && isCheckinExpired && isUserEscalated && (
+                                                    <span className="flex items-center gap-1 text-red-500 text-[9px] font-black uppercase bg-red-50 px-2 py-1 rounded">
+                                                        <Icon name="XCircle" size={12} /> Ausente (Prazo)
+                                                    </span>
+                                                )}
+
+                                                {!isReady && !isExpired && (
+                                                    <button onClick={() => setExpandedEvent(ev.id)} className="text-[9px] font-bold text-gray-400 hover:text-primary underline">Alterar</button>
+                                                )}
+                                            </div>
+                                        ) : expandedEvent === ev.id ? (
+                                            <div className="grid grid-cols-2 gap-2 min-w-[200px]">
+                                                {departments.filter(d => userProfile.participatingDepts?.includes(d.id) || userProfile.role === 'admin' || userProfile.role === 'master').map(d => (
+                                                    <button key={d.id} onClick={() => respond(ev, 'present', d.name)} className="p-2 rounded-lg border text-[9px] font-black uppercase hover:bg-gray-50 truncate" style={{ borderColor: d.color, color: d.color }}>{d.name}</button>
+                                                ))}
+                                                <button onClick={() => respond(ev, 'absent')} className="p-2 bg-red-50 text-red-600 rounded-lg text-[9px] font-black uppercase hover:bg-red-100">Indisp.</button>
+                                                <button onClick={() => setExpandedEvent(null)} className="col-span-2 p-1 text-[9px] font-bold text-gray-400">Cancelar</button>
+                                            </div>
+                                        ) : (
+                                            <button 
+                                                onClick={() => setExpandedEvent(ev.id)} 
+                                                disabled={isExpired}
+                                                className={`w-full md:w-auto px-6 py-4 rounded-xl font-black text-[10px] uppercase shadow-lg transition-all ${isExpired ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' : 'bg-primary text-white shadow-blue-200 hover:bg-primary/90 active:scale-95'}`}
+                                            >
+                                                {isExpired ? 'Fechado' : 'Dar disponibilidade'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {filteredEvents.length === 0 && <p className="col-span-full py-20 text-center text-gray-300 font-black uppercase text-xs border-2 border-dashed rounded-[3rem]">Nenhum evento encontrado.</p>}
+                    </div>
+
+                    {checkinEvent && (
+                        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl animate-in">
+                                <div className="text-center mb-6">
+                                    <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-500">
+                                        <Icon name="QrCode" size={32} />
+                                    </div>
+                                    <h3 className="font-black uppercase text-lg text-gray-800">Check-in</h3>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase">{checkinEvent.name}</p>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">Código do Evento</label>
+                                        <input 
+                                            value={checkinCode} 
+                                            onChange={e => setCheckinCode(e.target.value.toUpperCase())} 
+                                            className="w-full p-4 bg-gray-50 rounded-xl font-black text-center text-xl outline-none border-2 border-transparent focus:border-orange-200 uppercase tracking-widest" 
+                                            placeholder="XXXX"
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setCheckinEvent(null)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Cancelar</button>
+                                        <button onClick={submitCheckin} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-orange-200">Confirmar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function ViewScaleView({ events, attendance, departments }) {
+            const [filterCategory, setFilterCategory] = useState('Agenda Ministerial');
+            const [filterDay, setFilterDay] = useState('');
+            const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
+            const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+            const [filterPeriod, setFilterPeriod] = useState('');
+
+            const filteredEvents = useMemo(() => events.filter(ev => {
+                const d = new Date(ev.date + 'T12:00:00');
+                
+                const catMatch = ev.category === filterCategory || (!ev.category && filterCategory === 'Agenda Ministerial');
+                const yearMatch = d.getFullYear() === Number(filterYear);
+                const monthMatch = d.getMonth() === Number(filterMonth);
+                const dayMatch = filterDay ? d.getDate() === Number(filterDay) : true;
+                const periodMatch = filterPeriod ? ev.period === filterPeriod : true;
+                const isPublished = ev.scaleStatus === 'ready';
+
+                return catMatch && yearMatch && monthMatch && dayMatch && periodMatch && isPublished;
+            }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, filterCategory, filterDay, filterMonth, filterYear, filterPeriod]);
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Ver Escala Publicada</h1>
+                           
+                        <div className="flex flex-col md:flex-row gap-4 items-end w-full md:w-auto no-print">
+                            <button onClick={() => window.print()} className="bg-gray-800 text-white px-4 py-2 rounded-xl font-bold uppercase text-[10px] flex items-center gap-2 hover:bg-gray-700 transition shadow-lg shadow-gray-200">
+                                <Icon name="Printer" size={16} /> Imprimir / Salvar PDF
+                            </button>
+
+                            <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm">
+                                <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                    <option value="Agenda Ministerial">Agenda</option>
+                                    <option value="Congressos">Congressos</option>
+                                </select>
+                                <select value={filterDay} onChange={e => setFilterDay(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                    <option value="">Dia (Todos)</option>
+                                    {[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}
+                                </select>
+                                <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                    {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                </select>
+                                <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
+                                    {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                                <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800">
+                                    <option value="">Período (Todos)</option>
+                                    <option value="Manhã">Manhã</option>
+                                    <option value="Tarde">Tarde</option>
+                                    <option value="Noite">Noite</option>
+                                    <option value="Vigília">Vigília</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6 print:block">
+                        {filteredEvents.map(ev => {
+                            const pStyle = getPeriodStyle(ev.period);
+                            // Get escalated volunteers for this event
+                            const escalated = attendance.filter(a => a.eventId === ev.id && a.isEscalated);
+                            
+                            // Group by Dept
+                            const byDept = {};
+                            departments.forEach(d => {
+                                const vols = escalated.filter(a => a.servingDept === d.name);
+                                if (vols.length > 0) byDept[d.name] = { color: d.color, vols };
+                            });
+
+                            return (
+                                <div key={ev.id} className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden card-print">
+                                    <div className="bg-gray-50 p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                                        <div>
+                                            <h2 className="text-xl font-black uppercase text-gray-800">{ev.name}</h2>
+                                            <div className="flex gap-4 mt-2 text-[10px] font-bold text-gray-400 uppercase">
+                                                <span className="flex items-center gap-1"><Icon name="Calendar" size={14}/> {new Date(ev.date + 'T12:00:00').toLocaleDateString()}</span>
+                                                <span className="flex items-center gap-1"><Icon name="Clock" size={14}/> {ev.time}</span>
+                                                <span className={`flex items-center gap-1 px-2 py-0.5 rounded ${pStyle.bg} ${pStyle.text}`}><Icon name={pStyle.icon} size={14}/> {ev.period}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="p-6">
+                                        {Object.keys(byDept).length > 0 ? (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 print:grid-cols-2">
+                                                {Object.entries(byDept).map(([deptName, data]) => (
+                                                    <div key={deptName} className="border rounded-2xl p-4" style={{ borderLeft: `4px solid ${data.color}` }}>
+                                                        <h3 className="font-black text-xs uppercase mb-3" style={{ color: data.color }}>{deptName}</h3>
+                                                        <div className="space-y-2">
+                                                            {data.vols.map(v => (
+                                                                <div key={v.id} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
+                                                                    <span className="font-bold text-[10px] uppercase text-gray-700">{v.userName}</span>
+                                                                    {v.role && <span className="text-[9px] font-bold text-gray-400 bg-white px-2 py-0.5 rounded border">{v.role}</span>}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-center text-xs text-gray-400 font-bold uppercase py-4">Nenhum voluntário escalado ainda.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {filteredEvents.length === 0 && <p className="py-10 text-center text-gray-300 font-bold uppercase text-[10px]">Nenhuma escala encontrada com os filtros selecionados.</p>}
+                    </div>
+                </div>
+            );
+        }
+
+        function UserDepartments({ departments, userProfile, title }) {
+            const myDepts = useMemo(() => departments.filter(d => userProfile.participatingDepts?.includes(d.id)), [departments, userProfile.participatingDepts]);
+            
+            return (
+                <div className="space-y-6">
+                    <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">{title}</h1>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {myDepts.map(d => (
+                            <div key={d.id} className="bg-white p-8 rounded-[2.5rem] border-l-8 shadow-sm relative overflow-hidden group" style={{ borderLeftColor: d.color }}>
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className="p-3 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: `${d.color}20`, color: d.color }}>
+                                         <Icon name="Briefcase" size={24} />
+                                    </div>
+                                    <span className="text-[10px] font-black text-green-500 uppercase tracking-widest">Ativo</span>
+                                </div>
+                                <h3 className="text-xl font-black uppercase tracking-tight mb-2 leading-none text-gray-800">{d.name}</h3>
+                                <p className="text-[10px] font-black text-primary uppercase mb-4 tracking-widest leading-none">Líder: {d.leader}</p>
+                                <p className="text-xs text-gray-400 font-medium leading-relaxed">{d.description || "Sem descrição disponível."}</p>
+                            </div>
+                        ))}
+                        {myDepts.length === 0 && <p className="col-span-full py-20 text-center text-gray-300 font-black uppercase text-xs border-2 border-dashed rounded-[3rem]">Você não participa de frentes de trabalho.</p>}
+                    </div>
+                </div>
+            );
+        }
+
+        function ReportsView({ title, attendance, allUsers, departments }) {
+            const [month, setMonth] = useState(new Date().getMonth());
+            const [year, setYear] = useState(new Date().getFullYear());
+            const [day, setDay] = useState(null);
+            
+            const [search, setSearch] = useState("");
+            const [selectedVolunteer, setSelectedVolunteer] = useState(null);
+            const [selectedDeptReport, setSelectedDeptReport] = useState(null);
+
+            // Filtros de tempo para os modais de detalhes
+            const [detailMonth, setDetailMonth] = useState(new Date().getMonth());
+            const [detailYear, setDetailYear] = useState(new Date().getFullYear());
+            const [detailDay, setDetailDay] = useState(null);
+
+            // Sincronizar filtros iniciais do modal com os globais
+            useEffect(() => {
+                setDetailMonth(month);
+                setDetailYear(year);
+                setDetailDay(day);
+            }, [month, year, day, selectedVolunteer, selectedDeptReport]);
+
+            const searchedUsers = useMemo(() => {
+                if (!search) return [];
+                return allUsers.filter(u => u.name.toLowerCase().includes(search.toLowerCase()));
+            }, [allUsers, search]);
+
+            const getVolunteerStats = (userId, m, y, d) => {
+                let userAtt = attendance.filter(a => a.userId === userId); 
+               
+                userAtt = userAtt.filter(a => {
+                    const evtDate = new Date(a.eventDate);
+                    const sameMonth = evtDate.getUTCMonth() === Number(m);
+                    const sameYear = evtDate.getUTCFullYear() === Number(y);
+                    const sameDay = d ? evtDate.getUTCDate() === Number(d) : true;
+                    return sameMonth && sameYear && sameDay;
+                });
+
+                const avail = userAtt.filter(a => a.status === 'present').length;
+                const unavail = userAtt.filter(a => a.status === 'absent').length;
+                const escalated = userAtt.filter(a => a.isEscalated).length;
+                const lates = userAtt.filter(a => a.attendanceStatus === 'late').length;
+               
+                // Ausente = Escalado e (Status Absent OU (Não Checkin e Data Passou))
+                // Simplificação: Se está 'late', não conta 'absent'.
+                // Se está 'present' (Checkin OK), não conta 'absent'.
+                // Se a data já passou e não tem checkin, é absent.
+                const absents = userAtt.filter(a => {
+                    if (!a.isEscalated) return false;
+                    const passed = new Date() > new Date(a.eventDate + 'T23:59:59');
+                    // Se não tem checkin e a data passou -> falta
+                    if (!a.hasCheckedIn && passed) return true;
+                    // Se o status explicito é absent (ex: marcado manualmente)
+                    if (a.attendanceStatus === 'absent') return true;
+                    return false;
+                }).length;
+
+                const deptCounts = {};
+                userAtt.filter(a => a.status === 'present').forEach(a => {
+                    deptCounts[a.servingDept] = (deptCounts[a.servingDept] || 0) + 1;
+                });
+                const sortedDepts = Object.entries(deptCounts).sort((a,b) => b[1] - a[1]);
+            
+                return { avail, unavail, escalated, lates, absents, topDepts: sortedDepts };
+            };
+
+            const getDeptStats = (deptName, m, y, d) => {
+                const deptAtts = attendance.filter(a => {
+                    const evtDate = new Date(a.eventDate);
+                    return a.servingDept === deptName && 
+                           evtDate.getUTCMonth() === Number(m) && 
+                           evtDate.getUTCFullYear() === Number(y) &&
+                           (d ? evtDate.getUTCDate() === Number(d) : true);
+                });
+               
+                const avail = deptAtts.filter(a => a.status === 'present').length;
+                const unavail = deptAtts.filter(a => a.status === 'absent').length;
+                const escalated = deptAtts.filter(a => a.isEscalated).length;
+                const lates = deptAtts.filter(a => a.attendanceStatus === 'late').length;
+
+                const absents = deptAtts.filter(a => {
+                    if (!a.isEscalated) return false;
+                    const passed = new Date() > new Date(a.eventDate + 'T23:59:59');
+                    if (!a.hasCheckedIn && passed) return true;
+                    if (a.attendanceStatus === 'absent') return true;
+                    return false;
+                }).length;
+
+                return { avail, unavail, escalated, lates, absents };
+            };
+
+            const volStats = selectedVolunteer ? getVolunteerStats(selectedVolunteer.uid, detailMonth, detailYear, detailDay) : null;
+            const deptStats = selectedDeptReport ? getDeptStats(selectedDeptReport.name, detailMonth, detailYear, detailDay) : null;
+
+            return (
+                <div className="space-y-8">
+                    <FilterHeader title={title} month={month} setMonth={setMonth} year={year} setYear={setYear} />
+                    
+                    {/* Pesquisa Voluntário */}
+                    <div className="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4">
+                        <h3 className="font-black uppercase text-gray-800">Pesquisar Voluntários</h3>
+                        <div className="relative">
+                            <Icon name="Search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input 
+                                placeholder="Digite o nome..." 
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 text-gray-800" 
+                            />
+                        </div>
+                        {search && (
+                            <div className="space-y-2">
+                                {searchedUsers.map(u => (
+                                    <div key={u.uid} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl">
+                                        <span className="font-bold text-sm text-gray-800 uppercase">{u.name}</span>
+                                        <button onClick={() => setSelectedVolunteer(u)} className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg text-[10px] font-black uppercase hover:bg-blue-200">Ver Detalhes</button>
+                                    </div>
+                                ))}
+                                {searchedUsers.length === 0 && <p className="text-center text-xs text-gray-400 font-bold uppercase p-2">Nenhum voluntário encontrado.</p>}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Departamentos */}
+                    <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm">
+                        <h3 className="text-xl font-black uppercase tracking-tight mb-6 text-gray-800">Presença por Departamento</h3>
+                        <div className="space-y-4">
+                            {departments.map(d => (
+                                <div key={d.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm" style={{ color: d.color }}>
+                                            <Icon name="Briefcase" size={20} />
+                                        </div>
+                                        <div>
+                                            <span className="font-black text-xs uppercase text-gray-700 block">{d.name}</span>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setSelectedDeptReport(d)} className="px-4 py-2 bg-white border border-gray-200 text-gray-500 rounded-xl text-[9px] font-black uppercase hover:text-primary hover:border-primary">
+                                        Ver Detalhes
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Modal Voluntário */}
+                    {selectedVolunteer && volStats && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-black uppercase text-lg text-gray-800">{selectedVolunteer.name}</h3>
+                                    <button onClick={() => setSelectedVolunteer(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
+                                </div>
+                               
+                                {/* Filtros internos do modal */}
+                                <div className="flex gap-2 mb-6">
+                                    <select value={detailDay || ''} onChange={e => setDetailDay(e.target.value ? Number(e.target.value) : null)} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1"><option value="">Dia (Todos)</option>{[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
+                                    <select value={detailMonth} onChange={e => setDetailMonth(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                                    <select value={detailYear} onChange={e => setDetailYear(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 mb-6">
+                                    <div className="p-4 bg-green-50 rounded-2xl text-center border border-green-100">
+                                        <span className="block text-2xl font-black text-green-600">{volStats.avail}</span>
+                                        <span className="text-[9px] font-bold uppercase text-green-800">Disponibilidades</span>
+                                    </div>
+                                    <div className="p-4 bg-red-50 rounded-2xl text-center border border-red-100">
+                                        <span className="block text-2xl font-black text-red-600">{volStats.unavail}</span>
+                                        <span className="text-[9px] font-bold uppercase text-red-800">Indisponibilidades</span>
+                                    </div>
+                                    <div className="p-4 bg-purple-50 rounded-2xl text-center border border-purple-100">
+                                        <span className="block text-2xl font-black text-purple-600">{volStats.escalated}</span>
+                                        <span className="text-[9px] font-bold uppercase text-purple-800">Vezes Escalado</span>
+                                    </div>
+                                    <div className="p-4 bg-gray-50 rounded-2xl text-center border border-gray-100">
+                                        <span className="block text-xl font-black text-gray-800 flex justify-center gap-4">
+                                            <span className="text-red-500">{volStats.absents}</span> / <span className="text-yellow-500">{volStats.lates}</span>
+                                        </span>
+                                        <span className="text-[9px] font-bold uppercase text-gray-400">Faltas / Atrasos</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-2">Departamentos Mais Atuantes</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {volStats.topDepts.map(([dept, count]) => (
+                                            <span key={dept} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold uppercase border border-blue-100">
+                                                {dept}: {count}
+                                            </span>
+                                        ))}
+                                        {volStats.topDepts.length === 0 && <span className="text-xs text-gray-300">Sem dados.</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal Departamento */}
+                    {selectedDeptReport && deptStats && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-black uppercase text-lg text-gray-800" style={{ color: selectedDeptReport.color }}>{selectedDeptReport.name}</h3>
+                                    <button onClick={() => setSelectedDeptReport(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
+                                </div>
+                               
+                                <div className="flex gap-2 mb-6">
+                                    <select value={detailDay || ''} onChange={e => setDetailDay(e.target.value ? Number(e.target.value) : null)} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1"><option value="">Dia (Todos)</option>{[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
+                                    <select value={detailMonth} onChange={e => setDetailMonth(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                                    <select value={detailYear} onChange={e => setDetailYear(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 mb-6">
+                                    <div className="p-4 bg-green-50 rounded-2xl text-center border border-green-100">
+                                        <span className="block text-2xl font-black text-green-600">{deptStats.avail}</span>
+                                        <span className="text-[9px] font-bold uppercase text-green-800">Disponibilidades</span>
+                                    </div>
+                                    <div className="p-4 bg-red-50 rounded-2xl text-center border border-red-100">
+                                        <span className="block text-2xl font-black text-red-600">{deptStats.unavail}</span>
+                                        <span className="text-[9px] font-bold uppercase text-red-800">Indisponibilidades</span>
+                                    </div>
+                                    <div className="p-4 bg-purple-50 rounded-2xl text-center border border-purple-100">
+                                        <span className="block text-2xl font-black text-purple-600">{deptStats.escalated}</span>
+                                        <span className="text-[9px] font-bold uppercase text-purple-800">Escalações</span>
+                                    </div>
+                                    <div className="p-4 bg-gray-50 rounded-2xl text-center border border-gray-100">
+                                        <span className="block text-xl font-black text-gray-800 flex justify-center gap-4">
+                                            <span className="text-red-500">{deptStats.absents}</span> / <span className="text-yellow-500">{deptStats.lates}</span>
+                                        </span>
+                                        <span className="text-[9px] font-bold uppercase text-gray-400">Faltas / Atrasos</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // --- Admin Operational Components ---
+        
+        function AdminCreateEventsView({ events, showToast }) {
+            const [editingId, setEditingId] = useState(null);
+            const [form, setForm] = useState({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '', checkinDeadline2: '' });
+            const [eventToDelete, setEventToDelete] = useState(null);
+            const [listFilterMonth, setListFilterMonth] = useState(new Date().getMonth());
+            const [listFilterYear, setListFilterYear] = useState(new Date().getFullYear());
+            const [listFilterCategory, setListFilterCategory] = useState('all');
+
+            const uniqueNames = useMemo(() => [...new Set(events.map(e => e.name))], [events]);
+            const uniqueLocations = useMemo(() => [...new Set(events.map(e => e.location))], [events]);
+
+            const handleSave = async (e) => {
+                e.preventDefault();
+                if (!form.name || !form.date) return;
+                try {
+                    const data = { ...form, scaleStatus: "draft" };
+                    if (!editingId) data.createdAt = new Date().toISOString();
+                    if (editingId) {
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingId), data);
+                        showToast("Evento atualizado!");
+                        setEditingId(null);
+                        setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '', checkinDeadline2: '' }); 
+                    } else {
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), data);
+                        showToast("Evento criado!");
+                        setForm(prev => ({ ...prev, date: '', time: '', deadline: '', checkinCode: '', checkinDeadline: '', checkinDeadline2: '' })); 
+                    }
+                } catch (err) { console.error(err); }
+            };
+
+            const handleEdit = (ev) => {
+                setEditingId(ev.id);
+                setForm({ name: ev.name, date: ev.date, time: ev.time, period: ev.period, location: ev.location, category: ev.category || 'Agenda Ministerial', deadline: ev.deadline || '', checkinCode: ev.checkinCode || '', checkinDeadline: ev.checkinDeadline || '', checkinDeadline2: ev.checkinDeadline2 || '' });
+            };
+
+            const confirmDelete = async () => {
+                if (eventToDelete) {
+                    try {
+                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', eventToDelete));
+                        showToast("Evento excluído.");
+                    } catch (err) { console.error(err); }
+                    setEventToDelete(null);
+                }
+            };
+
+            const filteredEvents = events.filter(ev => {
+                const d = new Date(ev.date + 'T12:00:00'); 
+                const dateMatch = d.getMonth() === Number(listFilterMonth) && d.getFullYear() === Number(listFilterYear);
+                const catMatch = listFilterCategory === 'all' || ev.category === listFilterCategory;
+                return dateMatch && catMatch;
+            });
+
+            return (
+                <div className="space-y-8">
+                    <datalist id="eventNames">{uniqueNames.map(n => <option key={n} value={n} />)}</datalist>
+                    <datalist id="eventLocations">{uniqueLocations.map(l => <option key={l} value={l} />)}</datalist>
+
+                    <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Criar Eventos</h1>
+                    <form onSubmit={handleSave} className="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="font-black uppercase text-xs text-gray-400">{editingId ? 'Editando Evento' : 'Novo Evento'}</h3>
+                            {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '', checkinDeadline2: '' }); }} className="text-[10px] text-red-500 font-bold uppercase">Cancelar Edição</button>}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-gray-400 uppercase">Nome do Evento</label>
+                                <input list="eventNames" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" required />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-gray-400 uppercase">Local</label>
+                                <input list="eventLocations" value={form.location} onChange={e => setForm({...form, location: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-gray-400 uppercase">Data</label>
+                                <input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" required />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase">Horário</label>
+                                    <input type="time" value={form.time} onChange={e => setForm({...form, time: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase">Período</label>
+                                    <select value={form.period} onChange={e => setForm({...form, period: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800">
+                                        <option value="Manhã">Manhã</option>
+                                        <option value="Tarde">Tarde</option>
+                                        <option value="Noite">Noite</option>
+                                        <option value="Vigília">Vigília</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="space-y-1 md:col-span-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase">Categoria</label>
+                                <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800">
+                                    <option value="Agenda Ministerial">Agenda & Escalas</option>
+                                    <option value="Congressos">Congressos</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1 md:col-span-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase">Prazo para Disponibilidade</label>
+                                <input type="datetime-local" value={form.deadline} onChange={e => setForm({...form, deadline: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
+                            </div>
+                           
+                            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-gray-100 pt-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-1"><Icon name="QrCode" size={12}/> Código de Check-in</label>
+                                    <input value={form.checkinCode} onChange={e => setForm({...form, checkinCode: e.target.value.toUpperCase()})} placeholder="Ex: CULTO10" className="w-full p-3 bg-orange-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-orange-200 text-gray-800 uppercase" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-1"><Icon name="Clock" size={12}/> 1º Prazo Check-in (Ok)</label>
+                                    <input type="datetime-local" value={form.checkinDeadline} onChange={e => setForm({...form, checkinDeadline: e.target.value})} className="w-full p-3 bg-orange-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-orange-200 text-gray-800" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-1"><Icon name="Clock" size={12}/> 2º Prazo Check-in (Tolerância)</label>
+                                    <input type="datetime-local" value={form.checkinDeadline2} onChange={e => setForm({...form, checkinDeadline2: e.target.value})} className="w-full p-3 bg-orange-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-orange-200 text-gray-800" />
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" className={`w-full py-3 text-white rounded-xl font-black uppercase text-[10px] transition ${editingId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}>
+                            {editingId ? 'Salvar Alterações' : 'Adicionar Evento'}
+                        </button>
+                    </form>
+
+                    <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden">
+                        <div className="p-6 border-b border-gray-100 flex flex-col lg:flex-row justify-between items-center gap-4">
+                            <h3 className="font-black uppercase text-gray-800">Eventos Cadastrados</h3>
+                            <div className="flex gap-2 flex-wrap justify-end">
+                                <select value={listFilterCategory} onChange={e => setListFilterCategory(e.target.value)} className="bg-gray-50 p-2 rounded-lg text-xs font-bold uppercase outline-none cursor-pointer">
+                                    <option value="all">Todas as Categorias</option>
+                                    <option value="Agenda Ministerial">Agenda & Escalas</option>
+                                    <option value="Congressos">Congressos</option>
+                                </select>
+                                <select value={listFilterMonth} onChange={e => setListFilterMonth(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-xs font-bold uppercase outline-none cursor-pointer">
+                                    {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                </select>
+                                <select value={listFilterYear} onChange={e => setListFilterYear(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-xs font-bold uppercase outline-none cursor-pointer">
+                                    {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="divide-y divide-gray-50">
+                            {filteredEvents.sort((a,b) => new Date(b.date) - new Date(a.date)).map(ev => (
+                                <div key={ev.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition group">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="font-black text-sm text-gray-800 uppercase">{ev.name}</span>
+                                            <span className="text-[9px] font-bold uppercase bg-blue-50 text-blue-600 px-2 py-0.5 rounded">{ev.period}</span>
+                                            <span className="text-[9px] font-bold uppercase bg-gray-100 text-gray-500 px-2 py-0.5 rounded border">{ev.category === 'Congressos' ? 'Congressos' : 'Agenda'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 uppercase">
+                                            <span className="flex items-center gap-1"><Icon name="Calendar" size={12}/> {new Date(ev.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                                            <span className="flex items-center gap-1"><Icon name="Clock" size={12}/> {ev.time}</span>
+                                            <span className="flex items-center gap-1"><Icon name="MapPin" size={12}/> {ev.location || "---"}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => handleEdit(ev)} className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition">
+                                            <Icon name="Edit" size={16} />
+                                        </button>
+                                        <button type="button" onClick={() => setEventToDelete(ev.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
+                                            <Icon name="Trash2" size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                            {filteredEvents.length === 0 && <p className="text-center py-8 text-xs font-bold text-gray-300 uppercase">Nenhum evento neste período.</p>}
+                        </div>
+                    </div>
+                    {eventToDelete && <ConfirmModal title="Excluir Evento" message="Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita." onConfirm={confirmDelete} onCancel={() => setEventToDelete(null)} isDangerous={true} />}
+                </div>
+            );
+        }
+
+        function AdminScalesView({ events, attendance, users, departments, showToast, isLeader = false }) {
+            const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
+            const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+            const [filterCategory, setFilterCategory] = useState('all');
+            
+            const [statsModalEvent, setStatsModalEvent] = useState(null);
+            const [statsTab, setStatsTab] = useState('present'); 
+            const [scaleModalEvent, setScaleModalEvent] = useState(null);
+            const [scaleModalDept, setScaleModalDept] = useState(null);
+            const [expandedVolunteer, setExpandedVolunteer] = useState(null);
+            
+            const [checkinReportEvent, setCheckinReportEvent] = useState(null);
+
+            const filteredEvents = useMemo(() => events.filter(ev => {
+                const d = new Date(ev.date + 'T12:00:00'); 
+                const dateMatch = d.getMonth() === Number(filterMonth) && d.getFullYear() === Number(filterYear);
+                const catMatch = filterCategory === 'all' || ev.category === filterCategory;
+                return dateMatch && catMatch;
+            }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, filterMonth, filterYear, filterCategory]);
+
+            const toggleScale = async (event) => { 
+                const newStatus = event.scaleStatus === 'ready' ? 'draft' : 'ready';
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', event.id), { scaleStatus: newStatus }); 
+                showToast(`Escala ${newStatus === 'ready' ? 'publicada' : 'ocultada'}!`); 
+            };
+            
+            const toggleEscalation = async (att, role = null) => { 
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', att.id), { 
+                    isEscalated: !att.isEscalated,
+                    role: !att.isEscalated ? role : null 
+                }); 
+            };
+
+            const forceStatus = async (attId, newStatus) => {
+                try {
+                    // newStatus: 'present' (OK), 'late' (Atrasado), 'absent' (Ausente)
+                    // hasCheckedIn: true if present/late, false if absent
+                    const updates = { 
+                        attendanceStatus: newStatus,
+                        hasCheckedIn: newStatus !== 'absent'
+                    };
+                    if (newStatus !== 'absent') {
+                        updates.checkinTime = new Date().toISOString();
+                    } else {
+                        // Remove checkin time if marking as absent manually? Or keep history?
+                        // Keeping simple for now
+                    }
+
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), updates);
+                    showToast(`Status atualizado para ${newStatus}.`);
+                } catch(e) { console.error(e); }
+            };
+
+            const getEventLists = (eventId) => {
+                const eventAtts = attendance.filter(a => a.eventId === eventId);
+                const present = eventAtts.filter(a => a.status === 'present');
+                const absent = eventAtts.filter(a => a.status === 'absent');
+            
+                const respondedIds = eventAtts.map(a => a.userId);
+                const pendingUsers = users.filter(u => !respondedIds.includes(u.uid) && u.role !== 'master');
+
+                return { present, absent, pendingUsers };
+            };
+
+            const getCheckinReport = (eventId) => {
+                const escalated = attendance.filter(a => a.eventId === eventId && a.isEscalated);
+                const grouped = {};
+                escalated.forEach(a => {
+                    if (!grouped[a.servingDept]) grouped[a.servingDept] = { present: [], late: [], absent: [] };
+                   
+                    if (a.attendanceStatus === 'late') {
+                        grouped[a.servingDept].late.push(a);
+                    } else if (a.hasCheckedIn || a.attendanceStatus === 'present') {
+                        grouped[a.servingDept].present.push(a);
+                    } else {
+                        grouped[a.servingDept].absent.push(a);
+                    }
+                });
+                return grouped;
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 no-print">
+                        <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Gerenciar Escalas</h1>
+                        <div className="flex gap-2 flex-wrap justify-end">
+                            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer">
+                                <option value="all">Todas as Categorias</option>
+                                <option value="Agenda Ministerial">Agenda & Escalas</option>
+                                <option value="Congressos">Congressos</option>
+                            </select>
+                            <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer">
+                                {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                            </select>
+                            <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer">
+                                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        {filteredEvents.map(ev => {
+                            const { present, absent, pendingUsers } = getEventLists(ev.id);
+                            
+                            // Date formatting for Admin Scale View
+                            const dateObj = new Date(ev.date + 'T12:00:00');
+                            const weekDay = dateObj.toLocaleDateString('pt-BR', { weekday: 'long' });
+                            const weekDayCap = weekDay.charAt(0).toUpperCase() + weekDay.slice(1);
+                            const pStyle = getPeriodStyle(ev.period);
+
+                            return (
+                                <div key={ev.id} className="bg-white p-6 rounded-[2rem] border shadow-sm">
+                                    <div className="flex flex-col md:flex-row items-center gap-6">
+                                        <div className="bg-primary/5 text-primary p-4 rounded-2xl w-24 text-center shrink-0 flex flex-col items-center justify-center border border-primary/10">
+                                            <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Dia</span>
+                                            <span className="text-4xl font-black leading-none">{dateObj.getDate()}</span>
+                                        </div>
+                                        <div className="flex-1 text-center md:text-left">
+                                            <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+                                                <h3 className="font-black text-xl uppercase text-gray-800">{ev.name}</h3>
+                                                <span className="text-[9px] font-bold uppercase bg-gray-100 px-2 py-0.5 rounded border">{ev.category === 'Congressos' ? 'Congressos' : 'Agenda'}</span>
+                                            </div>
+                                            <div className="flex flex-wrap justify-center md:justify-start gap-2 text-[10px] font-black uppercase mt-1">
+                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+                                                    <Icon name="Calendar" size={13} /> {weekDayCap}, {dateObj.toLocaleDateString('pt-BR')}
+                                                </span>
+                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-500 rounded-xl border border-gray-100">
+                                                    <Icon name="Clock" size={13} /> {ev.time}
+                                                </span>
+                                                <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-transparent ${pStyle.bg} ${pStyle.text}`}>
+                                                    <Icon name={pStyle.icon} size={13} /> {ev.period}
+                                                </span>
+                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-500 rounded-xl border border-gray-100">
+                                                    <Icon name="MapPin" size={13} /> {ev.location || "Sede"}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-2 w-full md:w-auto">
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setStatsModalEvent(ev)} className="flex-1 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100 transition flex items-center justify-center gap-2">
+                                                    <Icon name="BarChart2" size={14} /> 
+                                                    Status ({present.length}/{present.length + absent.length + pendingUsers.length})
+                                                </button>
+                                                {!isLeader && (
+                                                    <button onClick={() => setCheckinReportEvent(ev)} className="flex-1 px-4 py-3 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black uppercase hover:bg-orange-100 transition flex items-center justify-center gap-2">
+                                                        <Icon name="QrCode" size={14} /> 
+                                                        Ver Check-in
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <button onClick={() => { setScaleModalEvent(ev); setScaleModalDept(departments[0]?.name); }} className="px-4 py-3 bg-purple-50 text-purple-600 rounded-xl text-[10px] font-black uppercase hover:bg-purple-100 transition flex items-center justify-center gap-2">
+                                                <Icon name="Users" size={14} /> Montar Escala
+                                            </button>
+                                            {!isLeader && (
+                                                <button onClick={() => toggleScale(ev)} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase transition flex items-center justify-center gap-2 ${ev.scaleStatus === 'ready' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                    <Icon name={ev.scaleStatus === 'ready' ? 'Eye' : 'EyeOff'} size={14} />
+                                                    {ev.scaleStatus === 'ready' ? 'Escala Publicada' : 'Rascunho'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                         {filteredEvents.length === 0 && <p className="text-center py-8 text-xs font-bold text-gray-300 uppercase">Nenhum evento encontrado com os filtros selecionados.</p>}
+                    </div>
+
+                    {statsModalEvent && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h3 className="font-black uppercase text-lg text-gray-800">Status de Disponibilidade</h3>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase">{statsModalEvent.name}</p>
+                                    </div>
+                                    <button onClick={() => setStatsModalEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
+                                </div>
+                                {(() => {
+                                    const { present, absent, pendingUsers } = getEventLists(statsModalEvent.id);
+                                    return (
+                                        <div className="space-y-6">
+                                            <div className="flex p-1 bg-gray-100 rounded-xl">
+                                                {[ { id: 'present', label: `Disponíveis (${present.length})` }, { id: 'absent', label: `Indisponíveis (${absent.length})` }, { id: 'pending', label: `Pendentes (${pendingUsers.length})` } ].map(tab => (
+                                                    <button key={tab.id} onClick={() => setStatsTab(tab.id)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${statsTab === tab.id ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}>{tab.label}</button>
+                                                ))}
+                                            </div>
+                                            <div className="max-h-[300px] overflow-y-auto space-y-2">
+                                                {statsTab === 'present' && present.map(p => (
+                                                    <div key={p.id} className="flex justify-between items-center p-3 bg-green-50 rounded-xl border border-green-100">
+                                                        <span className="font-bold text-xs uppercase text-green-800">{p.userName}</span>
+                                                        <span className="text-[9px] font-black uppercase bg-white px-2 py-0.5 rounded text-green-600">{p.servingDept}</span>
+                                                    </div>
+                                                ))}
+                                                {statsTab === 'absent' && absent.map(a => (
+                                                    <div key={a.id} className="flex justify-between items-center p-3 bg-red-50 rounded-xl border border-red-100">
+                                                        <span className="font-bold text-xs uppercase text-red-800">{a.userName}</span>
+                                                        <span className="text-[9px] font-black uppercase bg-white px-2 py-0.5 rounded text-red-400">Ausente</span>
+                                                    </div>
+                                                ))}
+                                                {statsTab === 'pending' && pendingUsers.map(u => (
+                                                    <div key={u.uid} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                                        <span className="font-bold text-xs uppercase text-gray-600">{u.name}</span>
+                                                        <span className="text-[9px] font-black uppercase bg-white px-2 py-0.5 rounded text-gray-400">Aguardando</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                    )}
+
+                    {checkinReportEvent && !isLeader && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h3 className="font-black uppercase text-lg text-gray-800">Relatório de Check-in</h3>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase">{checkinReportEvent.name}</p>
+                                    </div>
+                                    <button onClick={() => setCheckinReportEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
+                                </div>
+                                <div className="space-y-6">
+                                    {Object.entries(getCheckinReport(checkinReportEvent.id)).map(([deptName, data]) => (
+                                        <div key={deptName} className="border-b border-gray-100 pb-4 last:border-0">
+                                            <h4 className="font-black uppercase text-xs text-gray-800 mb-2">{deptName}</h4>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {/* Presentes */}
+                                                <div className="bg-green-50 p-2 rounded-xl">
+                                                    <p className="text-[9px] font-black text-green-500 uppercase mb-1">Presentes ({data.present.length})</p>
+                                                    {data.present.map(p => (
+                                                        <div key={p.id} className="flex justify-between items-center mb-1">
+                                                            <span className="text-[10px] font-bold text-green-800">{p.userName}</span>
+                                                            <div className="flex gap-1">
+                                                                <button title="Mover para Atrasado" onClick={() => forceStatus(p.id, 'late')} className="text-[8px] bg-white border border-yellow-200 text-yellow-500 px-1 py-0.5 rounded hover:bg-yellow-100"><Icon name="Clock" size={8}/></button>
+                                                                <button title="Mover para Ausente" onClick={() => forceStatus(p.id, 'absent')} className="text-[8px] bg-white border border-red-200 text-red-500 px-1 py-0.5 rounded hover:bg-red-100"><Icon name="X" size={8}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {data.present.length === 0 && <span className="text-[9px] text-green-300 italic">Ninguém</span>}
+                                                </div>
+                                                 
+                                                {/* Atrasados */}
+                                                <div className="bg-yellow-50 p-2 rounded-xl">
+                                                    <p className="text-[9px] font-black text-yellow-600 uppercase mb-1">Atrasados ({data.late.length})</p>
+                                                    {data.late.map(p => (
+                                                        <div key={p.id} className="flex justify-between items-center mb-1">
+                                                            <span className="text-[10px] font-bold text-yellow-800">{p.userName}</span>
+                                                            <div className="flex gap-1">
+                                                                <button title="Mover para Presente" onClick={() => forceStatus(p.id, 'present')} className="text-[8px] bg-white border border-green-200 text-green-500 px-1 py-0.5 rounded hover:bg-green-100"><Icon name="Check" size={8}/></button>
+                                                                <button title="Mover para Ausente" onClick={() => forceStatus(p.id, 'absent')} className="text-[8px] bg-white border border-red-200 text-red-500 px-1 py-0.5 rounded hover:bg-red-100"><Icon name="X" size={8}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {data.late.length === 0 && <span className="text-[9px] text-yellow-300 italic">Ninguém</span>}
+                                                </div>
+
+                                                {/* Ausentes */}
+                                                <div className="bg-red-50 p-2 rounded-xl">
+                                                    <p className="text-[9px] font-black text-red-500 uppercase mb-1">Ausentes ({data.absent.length})</p>
+                                                    {data.absent.map(a => (
+                                                        <div key={a.id} className="flex justify-between items-center mb-1">
+                                                            <span className="text-[10px] font-bold text-red-800">{a.userName}</span>
+                                                            <div className="flex gap-1">
+                                                                <button title="Mover para Presente" onClick={() => forceStatus(a.id, 'present')} className="text-[8px] bg-white border border-green-200 text-green-500 px-1 py-0.5 rounded hover:bg-green-100"><Icon name="Check" size={8}/></button>
+                                                                <button title="Mover para Atrasado" onClick={() => forceStatus(a.id, 'late')} className="text-[8px] bg-white border border-yellow-200 text-yellow-500 px-1 py-0.5 rounded hover:bg-yellow-100"><Icon name="Clock" size={8}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {data.absent.length === 0 && <span className="text-[9px] text-red-300 italic">Ninguém</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {Object.keys(getCheckinReport(checkinReportEvent.id)).length === 0 && <p className="text-center text-xs text-gray-400">Nenhum voluntário escalado.</p>}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {scaleModalEvent && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-4xl p-8 shadow-2xl animate-in max-h-[90vh] overflow-hidden flex flex-col">
+                                <div className="flex justify-between items-center mb-6 flex-shrink-0">
+                                    <div>
+                                        <h3 className="font-black uppercase text-lg text-gray-800">Montar Escala</h3>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase">{scaleModalEvent.name} • {new Date(scaleModalEvent.date).toLocaleDateString()}</p>
+                                    </div>
+                                    <button onClick={() => setScaleModalEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
+                                </div>
+                                <div className="flex flex-1 overflow-hidden gap-6">
+                                    <div className="w-1/3 overflow-y-auto space-y-2 pr-2">
+                                        {departments.map(d => (
+                                            <button key={d.id} onClick={() => setScaleModalDept(d.name)} className={`w-full text-left p-4 rounded-xl border-2 transition-all flex justify-between items-center ${scaleModalDept === d.name ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-100 text-gray-500 hover:border-gray-200'}`}>
+                                                <span className="font-black text-xs uppercase">{d.name}</span>
+                                                <Icon name="ChevronRight" size={14} />
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="w-2/3 bg-gray-50 rounded-2xl p-6 overflow-y-auto">
+                                        <h4 className="font-black uppercase text-sm text-gray-800 mb-4 flex items-center gap-2">
+                                            <Icon name="Users" size={16} className="text-purple-500" />
+                                            Voluntários Disponíveis - {scaleModalDept}
+                                        </h4>
+                                        <div className="space-y-2">
+                                            {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).map(att => {
+                                                const deptObj = departments.find(d => d.name === att.servingDept);
+                                                const hasFunctions = deptObj?.functions && deptObj.functions.length > 0;
+                                                return (
+                                                    <div key={att.id} className="flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                                        <div className="flex items-center justify-between p-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-black text-xs">{att.userName.charAt(0)}</div>
+                                                                <span className="font-bold text-xs uppercase text-gray-700">{att.userName}</span>
+                                                            </div>
+                                                            {att.isEscalated ? (
+                                                                <button onClick={() => toggleEscalation(att)} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-green-500 text-white shadow-md shadow-green-200">Escalado {att.role ? `(${att.role})` : ''}</button>
+                                                            ) : (
+                                                                <button onClick={() => { if (hasFunctions) { setExpandedVolunteer(expandedVolunteer === att.id ? null : att.id); } else { toggleEscalation(att, 'Voluntário'); } }} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-gray-100 text-gray-400 hover:bg-gray-200">Escalar</button>
+                                                            )}
+                                                        </div>
+                                                        {!att.isEscalated && expandedVolunteer === att.id && hasFunctions && (
+                                                            <div className="bg-gray-50 p-2 grid grid-cols-2 gap-2 animate-in border-t border-gray-100">
+                                                                {deptObj.functions.map(role => (
+                                                                    <button key={role} onClick={() => { toggleEscalation(att, role); setExpandedVolunteer(null); }} className="p-2 bg-white border rounded text-[10px] font-bold hover:border-purple-500 hover:text-purple-600 transition">{role}</button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                            {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).length === 0 && (
+                                                <p className="text-center py-10 text-gray-400 text-xs font-bold uppercase">Nenhum voluntário disponível nesta função.</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function AdminDepartmentsView({ departments, showToast }) {
+            const [editingDept, setEditingDept] = useState(null);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [form, setForm] = useState({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '', functions: [] });
+            const [newFunction, setNewFunction] = useState('');
+            const [deptToDelete, setDeptToDelete] = useState(null);
+
+            const handleSave = async (e) => {
+                e.preventDefault();
+                try {
+                    if (editingDept) {
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'departments', editingDept.id), form);
+                        showToast("Departamento atualizado!");
+                    } else {
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), form);
+                        showToast("Departamento criado!");
+                    }
+                    setIsModalOpen(false); setEditingDept(null); setForm({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '', functions: [] });
+                } catch (err) { console.error(err); }
+            };
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.size > 1000000) { showToast("A imagem deve ter menos de 1MB."); return; }
+                    const reader = new FileReader();
+                    reader.onloadend = () => { setForm(prev => ({ ...prev, imageUrl: reader.result })); };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const addFunction = () => {
+                if(newFunction.trim()) {
+                    setForm(prev => ({ ...prev, functions: [...(prev.functions || []), newFunction.trim()] }));
+                    setNewFunction('');
+                }
+            };
+
+            const openEdit = (d) => { setEditingDept(d); setForm({ ...d, functions: d.functions || [] }); setIsModalOpen(true); };
+            const openNew = () => { setEditingDept(null); setForm({ name: '', leader: '', description: '', color: '#3b82f6', imageUrl: '', functions: [] }); setIsModalOpen(true); };
+            const confirmDelete = async () => { if(deptToDelete) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'departments', deptToDelete)); showToast("Departamento excluído."); setDeptToDelete(null); } };
+
+            return (
+                <div className="space-y-6">
+                    <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Gerenciar Departamentos</h1>
+                    <button onClick={openNew} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-purple-100 hover:bg-purple-700 transition flex items-center justify-center gap-2"><Icon name="Plus" size={16} /> Adicionar Departamento</button>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {departments.map(d => (
+                            <div key={d.id} className="bg-white p-4 rounded-[2rem] border-l-4 shadow-sm relative group overflow-hidden" style={{ borderLeftColor: d.color }}>
+                                <div className="flex justify-between items-start mb-3">
+                                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center shadow-sm">{d.imageUrl ? <img src={d.imageUrl} className="w-full h-full object-cover" /> : <Icon name="Briefcase" size={18} style={{ color: d.color }} />}</div>
+                                    <div className="flex gap-1"><button onClick={() => openEdit(d)} className="p-1.5 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100"><Icon name="Edit" size={12} /></button><button onClick={() => setDeptToDelete(d.id)} className="p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Icon name="Trash2" size={12} /></button></div>
+                                </div>
+                                <h3 className="text-sm font-black uppercase text-gray-800 leading-tight">{d.name}</h3>
+                                <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Líder: {d.leader}</p>
+                            </div>
+                        ))}
+                    </div>
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
+                                <h2 className="text-2xl font-black uppercase text-gray-800 mb-6">{editingDept ? 'Editar' : 'Novo'} Departamento</h2>
+                                <form onSubmit={handleSave} className="space-y-4">
+                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Nome</label><input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" required /></div>
+                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Líder</label><input value={form.leader} onChange={e => setForm({...form, leader: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Imagem (Upload)</label><input type="file" accept="image/*" onChange={handleImageUpload} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-xs outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />{form.imageUrl && <p className="text-[9px] text-green-500 font-bold mt-1 uppercase">Imagem carregada</p>}</div>
+                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Cor</label><div className="flex gap-3"><input type="color" value={form.color} onChange={e => setForm({...form, color: e.target.value})} className="w-12 h-12 rounded-xl cursor-pointer border-none" /><input type="text" value={form.color} onChange={e => setForm({...form, color: e.target.value})} className="flex-1 p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800 uppercase" /></div></div>
+                                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Funções / Cargos</label><div className="flex gap-2"><input value={newFunction} onChange={e => setNewFunction(e.target.value)} placeholder="Ex: Filmmaker" className="flex-1 p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800"/><button type="button" onClick={addFunction} className="p-3 bg-purple-100 text-purple-600 rounded-xl hover:bg-purple-200"><Icon name="Plus" size={16}/></button></div><div className="flex flex-wrap gap-2 mt-2">{(form.functions || []).map((f, i) => (<span key={i} className="px-3 py-1 bg-gray-100 rounded-lg text-xs font-bold text-gray-600 flex items-center gap-2">{f} <button type="button" onClick={() => setForm(prev => ({...prev, functions: prev.functions.filter((_, idx) => idx !== i)}))} className="text-red-400 hover:text-red-600"><Icon name="X" size={12}/></button></span>))}{(form.functions || []).length === 0 && <span className="text-xs text-gray-400 italic">Nenhuma função adicionada.</span>}</div></div>
+                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Descrição</label><textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800 h-24"></textarea></div>
+                                    <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Cancelar</button><button type="submit" className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-purple-700 shadow-lg">Salvar</button></div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                    {deptToDelete && <ConfirmModal title="Excluir Departamento" message="Tem certeza? Todos os dados associados serão perdidos." onConfirm={confirmDelete} onCancel={() => setDeptToDelete(null)} isDangerous={true} />}
+                </div>
+            );
+        }
+
+        function AdminTeamView({ users, departments, showToast }) {
+            const [editingUser, setEditingUser] = useState(null);
+            const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+            const [userForm, setUserForm] = useState({ name: '', password: '', unitType: '', unitName: '', departments: [] });
+            const [userToDelete, setUserToDelete] = useState(null);
+            const [searchTerm, setSearchTerm] = useState("");
+
+            const handleSaveUser = async (e) => {
+                e.preventDefault();
+                try {
+                    const uid = editingUser ? editingUser.uid : userForm.name.trim().toLowerCase().replace(/\s+/g, '_');
+                    
+                    // CORRECTION: Preserve existing role if editing, otherwise default to 'user'
+                    const currentRole = editingUser ? editingUser.role : 'user';
+
+                    const userData = { 
+                        name: userForm.name, 
+                        username: userForm.name, 
+                        password: userForm.password, 
+                        unitType: userForm.unitType, 
+                        unitName: userForm.unitName, 
+                        participatingDepts: userForm.departments, 
+                        role: currentRole, 
+                        status: 'active', 
+                        updatedAt: new Date().toISOString() 
+                    };
+                    if (!editingUser) userData.createdAt = new Date().toISOString();
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uid), userData, { merge: true });
+                    setIsUserModalOpen(false); setEditingUser(null); setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [] });
+                    showToast(editingUser ? "Membro atualizado!" : "Membro adicionado!");
+                } catch (err) { console.error(err); showToast("Erro ao salvar membro."); }
+            };
+
+            const openEditUser = (u) => { setEditingUser(u); setUserForm({ name: u.name, password: u.password || '', unitType: u.unitType || '', unitName: u.unitName || '', departments: u.participatingDepts || [] }); setIsUserModalOpen(true); };
+            const openNewUser = () => { setEditingUser(null); setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [] }); setIsUserModalOpen(true); };
+            const toggleDeptInForm = (deptId) => setUserForm(prev => ({ ...prev, departments: prev.departments.includes(deptId) ? prev.departments.filter(d => d !== deptId) : [...prev.departments, deptId] }));
+            const confirmDelete = async () => { if(userToDelete) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userToDelete)); showToast("Membro excluído."); setUserToDelete(null); } };
+            const toggleUserStatus = async (user) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), { status: user.status === 'active' ? 'blocked' : 'active' }); showToast("Status alterado."); };
+
+            const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+            return (
+                <div className="space-y-6">
+                    <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Gerenciar Equipe</h1>
+                    
+                    <div className="space-y-4">
+                        <button onClick={openNewUser} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-purple-100 hover:bg-purple-700 transition flex items-center justify-center gap-2"><Icon name="Plus" size={16} /> Adicionar Novo Membro</button>
+                           
+                        {/* Search Bar */}
+                        <div className="relative">
+                            <Icon name="Search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input 
+                                placeholder="Pesquisar membro..." 
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="w-full pl-12 pr-4 py-3 bg-white rounded-xl border border-gray-100 focus:border-purple-200 outline-none" 
+                            />
+                        </div>
+
+                        <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden">
+                            <div className="divide-y divide-gray-50">
+                                {filteredUsers.map(u => (
+                                    <div key={u.uid} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black uppercase ${u.status === 'blocked' ? 'bg-red-400' : u.role === 'admin' || u.role === 'master' ? 'bg-purple-600' : 'bg-green-400'}`}>{u.name.charAt(0)}</div>
+                                            <div>
+                                                <p className="font-bold text-sm text-gray-800 uppercase">{u.name}</p>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase">{u.role === 'master' ? 'Master Admin' : u.role === 'admin' ? 'Administrador' : 'Voluntário'} • Senha: {u.password}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => openEditUser(u)} className="p-2 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100"><Icon name="Edit2" size={16} /></button>
+                                            {u.role !== 'master' && (
+                                                <>
+                                                    <button onClick={() => toggleUserStatus(u)} className={`p-2 rounded-lg ${u.status === 'active' ? 'bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500' : 'bg-green-100 text-green-500'}`}><Icon name={u.status === 'active' ? 'Lock' : 'Unlock'} size={16} /></button>
+                                                    <button onClick={() => setUserToDelete(u.uid)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Icon name="Trash2" size={16} /></button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    {isUserModalOpen && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
+                                <h2 className="text-2xl font-black uppercase text-gray-800 mb-6">{editingUser ? 'Editar Membro' : 'Novo Membro'}</h2>
+                                <form onSubmit={handleSaveUser} className="space-y-4">
+                                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Nome Completo</label><input value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} required className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Senha de Acesso</label><input value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} required className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                    <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Tipo Unidade</label><select value={userForm.unitType} onChange={e => setUserForm({...userForm, unitType: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800"><option value="">Selecione...</option><option value="Regional">Regional</option><option value="Setor">Setor</option><option value="Congregação">Congregação</option></select></div><div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Nome Unidade</label><input value={userForm.unitName} onChange={e => setUserForm({...userForm, unitName: e.target.value})} placeholder="Ex: Sede" className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div></div>
+                                    <div className="space-y-2 pt-2"><label className="text-[10px] font-black uppercase text-gray-400">Departamentos</label><div className="grid grid-cols-2 gap-2">{departments.map(d => (<button key={d.id} type="button" onClick={() => toggleDeptInForm(d.id)} className={`p-2 rounded-xl border-2 text-[10px] font-black uppercase transition-all ${userForm.departments.includes(d.id) ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-100 text-gray-400 hover:border-gray-200'}`}>{d.name}</button>))}</div></div>
+                                    <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsUserModalOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Cancelar</button><button type="submit" className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-purple-700 shadow-lg shadow-purple-200">Salvar</button></div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                    {userToDelete && <ConfirmModal title="Excluir Membro" message="Tem certeza? O acesso será revogado imediatamente." onConfirm={confirmDelete} onCancel={() => setUserToDelete(null)} isDangerous={true} />}
+                </div>
+            );
+        }
+
+        function MasterSettingsView({ settings, onUpdateSettings, showToast }) {
+            const [form, setForm] = useState(settings);
+            useEffect(() => { setForm(settings); }, [settings]);
+            const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+            const handleSectionNameChange = (key, value) => setForm(prev => ({ ...prev, tabNames: { ...prev.tabNames, [key]: value } }));
+            const handleImageUpload = (e, field) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.size > 2000000) { showToast("A imagem deve ter menos de 2MB."); return; }
+                    const reader = new FileReader();
+                    reader.onloadend = () => { handleChange(field, reader.result); };
+                    reader.readAsDataURL(file);
+                }
+            };
+            const handleSave = async (e) => { e.preventDefault(); await onUpdateSettings(form); };
+
+            return (
+                <div className="space-y-8 pb-20">
+                    <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Personalização do Sistema</h1>
+                    <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm space-y-6">
+                            <h3 className="font-black uppercase text-lg text-gray-800 flex items-center gap-2"><Icon name="Palette" className="text-purple-500" /> Aparência</h3>
+                            <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Cor Principal (Hex)</label><div className="flex gap-3"><input type="color" value={form.primaryColor} onChange={e => handleChange('primaryColor', e.target.value)} className="w-12 h-12 rounded-xl cursor-pointer border-none" /><input type="text" value={form.primaryColor} onChange={e => handleChange('primaryColor', e.target.value)} className="flex-1 p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800 uppercase" /></div></div>
+                            <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Título do Login/Portal</label><input value={form.loginTitle} onChange={e => handleChange('loginTitle', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Imagem da Logo (Upload)</label><input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'logoUrl')} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-xs outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />{form.logoUrl && <p className="text-[9px] text-green-500 font-bold mt-1 uppercase">Imagem carregada</p>}</div>
+                             <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Upload Imagem de Fundo (Login)</label><input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'loginBannerUrl')} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-xs outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />{form.loginBannerUrl && <p className="text-[9px] text-green-500 font-bold mt-1 uppercase">Imagem carregada</p>}</div>
+                        </div>
+                        <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm space-y-6">
+                            <h3 className="font-black uppercase text-lg text-gray-800 flex items-center gap-2"><Icon name="Type" className="text-purple-500" /> Nomes das Seções</h3>
+                            <div className="space-y-4">
+                                <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Aba Painel</label><input value={form.tabNames?.dashboard || ''} onChange={e => handleSectionNameChange('dashboard', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Aba Agenda & Escalas</label><input value={form.tabNames?.agenda || ''} onChange={e => handleSectionNameChange('agenda', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Aba Congressos</label><input value={form.tabNames?.congressos || 'Congressos'} onChange={e => handleSectionNameChange('congressos', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Aba Minha Equipe</label><input value={form.tabNames?.departments || ''} onChange={e => handleSectionNameChange('departments', e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                            </div>
+                        </div>
+                        <div className="lg:col-span-2"><button type="submit" className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-purple-700 shadow-xl shadow-purple-100 transition">Salvar Alterações</button></div>
+                    </form>
+                </div>
+            );
+        }
+
         function App() {
             const [user, setUser] = useState(null);
             const [firebaseUser, setFirebaseUser] = useState(null); 
@@ -213,61 +1708,72 @@
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [appSettings, setAppSettings] = useState({ primaryColor: '#3b82f6', loginTitle: 'Portal Ministerial', loginBannerUrl: '', logoUrl: '', tabNames: { dashboard: 'Painel', agenda: 'Agenda', departments: 'Minha Equipe', reports: 'Relatórios', congressos: 'Congressos' } });
 
-            useEffect(() => { 
-                const unsubscribe = auth.onAuthStateChanged((u) => { 
-                    setFirebaseUser(u); 
-                    if (!u) auth.signInAnonymously(); 
-                }); 
-                return () => unsubscribe(); 
-            }, []);
+            useEffect(() => { const initAuth = async () => { try { if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) { await signInWithCustomToken(auth, __initial_auth_token); } else { await signInAnonymously(auth); } } catch (e) { console.error("Auth Init Error:", e); } }; initAuth(); const unsubscribe = onAuthStateChanged(auth, (u) => { setFirebaseUser(u); }); return () => unsubscribe(); }, []);
+            useEffect(() => { if (!firebaseUser) return; const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (docSnap) => { if (docSnap.exists()) { setAppSettings(prev => ({ ...prev, ...docSnap.data() })); } }); return () => unsubSettings(); }, [firebaseUser]);
+            const handleUpdateSettings = async (newSettings) => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), newSettings, { merge: true }); setToastMsg("Configurações salvas!"); } catch (e) { console.error(e); setToastMsg("Erro ao salvar."); } };
+            
+            // Self-heal Master Role Logic
+            useEffect(() => {
+                if (!firebaseUser) return;
+                const enforceMasterPrivileges = async () => {
+                    try {
+                        const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master');
+                        const docSnap = await getDoc(masterRef);
+                        // If master exists but has wrong role, fix it
+                        if (docSnap.exists() && docSnap.data().role !== 'master') {
+                             await updateDoc(masterRef, { role: 'master' });
+                             console.log("Permissões de Master restauradas.");
+                        }
+                    } catch(e) { console.error(e); }
+                };
+                enforceMasterPrivileges();
+            }, [firebaseUser]);
 
             useEffect(() => { 
                 if (!firebaseUser) return; 
-                const unsubSettings = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('settings').doc('config')
-                    .onSnapshot((docSnap) => { 
-                        if (docSnap.exists) { setAppSettings(prev => ({ ...prev, ...docSnap.data() })); } 
-                    }); 
-                return () => unsubSettings(); 
+                const seedData = async () => { 
+                    const masterDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master')); 
+                    if (!masterDoc.exists()) { 
+                        const initialUsers = [ 
+                            { name: "Master", pass: "adm2026", role: "master" }, 
+                            { name: "Areli Castro", pass: "areli2026", role: "user" }, 
+                            { name: "Lider", pass: "lider2026", role: "admin", specialRole: "leader" }, // Novo usuário Lider
+                            { name: "Isabelle Neves", pass: "belle2026", role: "user" }, 
+                            { name: "Felipe Silva", pass: "felipe2026", role: "user" }, 
+                            { name: "Adriel Carvalho", pass: "adriel2026", role: "user" }, 
+                            { name: "Charles Santos", pass: "charles2026", role: "user" }, 
+                            { name: "Leandro da Silva", pass: "leo2026", role: "user" }, 
+                            { name: "Leandro Cavalcante", pass: "leo2026", role: "user" }, 
+                            { name: "Julia Gonçalves", pass: "julia2026", role: "user" }, 
+                            { name: "Macário", pass: "macario2026", role: "user" }, 
+                            { name: "Maranhão", pass: "maranhao2026", role: "user" }, 
+                            { name: "Bruno Ventura", pass: "bruno2026", role: "user" } 
+                        ]; 
+                        const batch = writeBatch(db); 
+                        initialUsers.forEach(u => { 
+                            const id = u.name.trim().toLowerCase().replace(/\s+/g, '_'); 
+                            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id); 
+                            batch.set(docRef, { 
+                                name: u.name, 
+                                username: u.name, 
+                                password: u.pass, 
+                                role: u.role, 
+                                status: 'active', 
+                                unitType: u.role === 'master' ? 'Geral' : 'Regional', 
+                                unitName: 'Sede', 
+                                participatingDepts: [], 
+                                createdAt: new Date().toISOString() 
+                            }); 
+                        }); 
+                        await batch.commit(); 
+                    } 
+                }; 
+                seedData(); 
             }, [firebaseUser]);
 
-            // [Lógica de Fetch de dados convertida para sintaxe compatível]
-            useEffect(() => {
-                if (!firebaseUser || !userData) return;
-                
-                const baseRef = db.collection('artifacts').doc(appId).collection('public').doc('data');
+            useEffect(() => { if (!firebaseUser || !userData) return; const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); setUserData({ uid: docSnap.id, ...data }); } }); const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => { if (snap.empty) { ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' })); } else { setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() }))); } }); let unsubAllUsers = () => {}; if (userData.role === 'admin' || userData.role === 'master') { unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })))); } return () => { unsubProfile(); unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); }; }, [firebaseUser, userData?.uid, userData?.role]);
 
-                const unsubEvents = baseRef.collection('events').onSnapshot(snap => setEvents(snap.docs.map(d => ({id: d.id, ...d.data()}))));
-                const unsubAtt = baseRef.collection('attendance').onSnapshot(snap => setAttendance(snap.docs.map(d => ({id: d.id, ...d.data()}))));
-                const unsubDepts = baseRef.collection('departments').onSnapshot(snap => setDepartments(snap.docs.map(d => ({id: d.id, ...d.data()}))));
-                
-                let unsubAllUsers = () => {};
-                if (userData.role === 'admin' || userData.role === 'master') {
-                    unsubAllUsers = baseRef.collection('users').onSnapshot(snap => setAllUsers(snap.docs.map(d => ({uid: d.id, ...d.data()}))));
-                }
-                return () => { unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); };
-            }, [firebaseUser, userData]);
-
-            const handleLogin = async (e) => {
-                e.preventDefault();
-                setLoginError(null);
-                setAuthLoading(true);
-                const username = e.target.username.value;
-                const password = e.target.password.value;
-                try {
-                    const userId = username.trim().toLowerCase().replace(/\s+/g, '_');
-                    const userSnap = await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('users').doc(userId).get();
-                    if (userSnap.exists && userSnap.data().password === password) {
-                        setUserData({ uid: userSnap.id, ...userSnap.data() });
-                    } else {
-                        setLoginError("Credenciais inválidas.");
-                    }
-                } catch (err) {
-                    setLoginError("Erro na conexão.");
-                } finally {
-                    setAuthLoading(false);
-                }
-            };
-
+            const handleLogin = async (e) => { e.preventDefault(); setLoginError(null); setAuthLoading(true); const username = e.target.username.value; const password = e.target.password.value; try { if (!firebaseUser) await signInAnonymously(auth); const userId = username.trim().toLowerCase().replace(/\s+/g, '_'); const userSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId)); if (userSnap.exists() && userSnap.data().password === password) { setUserData({ uid: userSnap.id, ...userSnap.data() }); } else { setLoginError("Credenciais inválidas."); } } catch (err) { setLoginError("Erro na conexão."); } finally { setAuthLoading(false); } };
             const handleLogout = () => setUserData(null);
             const showToast = (msg) => setToastMsg(msg);
 
@@ -280,62 +1786,78 @@
             return (
                 <div className="flex min-h-screen bg-gray-50 text-gray-800 font-sans selection:bg-primary/20">
                     <CustomStyles primaryColor={appSettings.primaryColor} />
-                    {/* Barra Lateral Desktop */}
                     <aside className="hidden md:flex flex-col w-72 bg-white border-r p-6 fixed h-full z-20 no-print overflow-y-auto">
-                        <div className="flex items-center gap-3 mb-12 px-2">
-                             <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg overflow-hidden">
-                                {appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={20} />}
-                             </div>
-                             <h1 className="font-black uppercase text-xs tracking-tight leading-none text-gray-800">{appSettings.loginTitle}</h1>
-                        </div>
+                        <div className="flex items-center gap-3 mb-12 px-2"><div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200 overflow-hidden">{appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={20} />}</div><h1 className="font-black uppercase text-xs tracking-tight leading-none text-gray-800 break-words max-w-[150px]">{appSettings.loginTitle}</h1></div>
                         <nav className="flex-1 space-y-2">
                             <NavItem active={view === 'dashboard'} iconName="LayoutDashboard" label={appSettings.tabNames.dashboard} onClick={() => setView('dashboard')} open={true} />
                             <NavItem active={view === 'agenda'} iconName="Calendar" label={appSettings.tabNames.agenda} onClick={() => setView('agenda')} open={true} />
                             <NavItem active={view === 'congressos'} iconName="Trophy" label={appSettings.tabNames.congressos} onClick={() => setView('congressos')} open={true} />
                             <NavItem active={view === 'depts'} iconName="Briefcase" label={appSettings.tabNames.departments} onClick={() => setView('depts')} open={true} />
-                            {isAdmin && (
+                            {isAdmin && (<><div className="my-6 border-t border-gray-100"></div><p className="px-4 text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
+                            
+                            {!isLeader && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => setView('create_events')} open={true} />}
+                            
+                            <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => setView('manage_scales')} open={true} />
+                            
+                            {!isLeader && (
                                 <>
-                                    <div className="my-6 border-t border-gray-100"></div>
-                                    <p className="px-4 text-[9px] font-black text-gray-300 uppercase mb-2">Administração</p>
-                                    {!isLeader && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => setView('create_events')} open={true} />}
-                                    <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => setView('manage_scales')} open={true} />
-                                    {!isLeader && (
-                                        <>
-                                            <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => setView('view_scale')} open={true} />
-                                            <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => setView('manage_team')} open={true} />
-                                            <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => setView('reports')} open={true} />
-                                        </>
-                                    )}
+                                    <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => setView('view_scale')} open={true} />
+                                    <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => setView('manage_team')} open={true} />
+                                    <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => setView('manage_depts')} open={true} />
+                                    <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => setView('reports')} open={true} />
+                                    <div className="my-2"></div>
+                                    <NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => setView('admin_master')} open={true} />
                                 </>
                             )}
+                            </>)}
                         </nav>
-                        <div className="mt-8 pt-6 border-t border-gray-100 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-black text-gray-500 uppercase">{userData.name.charAt(0)}</div>
-                            <div className="flex-1 overflow-hidden">
-                                <p className="font-bold text-xs truncate text-gray-800">{userData.name}</p>
-                                <button onClick={handleLogout} className="text-[10px] text-red-400 font-bold uppercase hover:text-red-600">Sair</button>
-                            </div>
-                        </div>
+                        <div className="mt-8 pt-6 border-t border-gray-100 flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-black text-gray-500 uppercase">{userData.name.charAt(0)}</div><div className="flex-1 overflow-hidden"><p className="font-bold text-xs truncate text-gray-800">{userData.name}</p><button onClick={handleLogout} className="text-[10px] text-red-400 font-bold uppercase hover:text-red-600">Sair</button></div></div>
                     </aside>
-
-                    {/* Conteúdo Principal */}
+                    {isAdmin && (<div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-50"><div className="flex items-center gap-2"><div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white overflow-hidden">{appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={16} />}</div><h1 className="font-black uppercase text-xs text-gray-800">{appSettings.loginTitle}</h1></div><button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-gray-50 rounded-xl text-gray-500"><Icon name="Menu" size={24} /></button></div>)}
+                    {isAdmin && isMobileMenuOpen && (<div className="fixed inset-0 z-[60] flex md:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div><div className="relative w-64 bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in"><div className="flex justify-between items-center mb-8"><h2 className="font-black uppercase text-lg text-gray-800">Menu Admin</h2><button onClick={() => setIsMobileMenuOpen(false)}><Icon name="X" size={24} /></button></div><div className="space-y-2"><p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
+                        {!isLeader && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => { setView('create_events'); setIsMobileMenuOpen(false); }} open={true} />}
+                        <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => { setView('manage_scales'); setIsMobileMenuOpen(false); }} open={true} />
+                        {!isLeader && (
+                            <>
+                                <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => { setView('view_scale'); setIsMobileMenuOpen(false); }} open={true} />
+                                <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => { setView('manage_team'); setIsMobileMenuOpen(false); }} open={true} />
+                                <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => { setView('manage_depts'); setIsMobileMenuOpen(false); }} open={true} />
+                                <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => { setView('reports'); setIsMobileMenuOpen(false); }} open={true} />
+                                <div className="my-4 border-t border-gray-100"></div>
+                                <NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => { setView('admin_master'); setIsMobileMenuOpen(false); }} open={true} />
+                            </>
+                        )}
+                        </div></div></div>)}
+                    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-2 pb-safe flex justify-around items-center z-50 no-print shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                             <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}><Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /><span className="text-[9px] font-bold">Painel</span></button>
+                             <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} /><span className="text-[9px] font-bold">Agenda</span></button>
+                             <button onClick={() => setView('congressos')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'congressos' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Trophy" size={20} strokeWidth={view === 'congressos' ? 2.5 : 2} /><span className="text-[9px] font-bold">Congressos</span></button>
+                             <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>
+                             <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400"><Icon name="LogOut" size={20} /><span className="text-[9px] font-bold">Sair</span></button>
+                    </div>
                     <main className={`flex-1 md:ml-72 p-4 md:p-12 mb-24 md:mb-0 max-w-7xl mx-auto w-full ${isAdmin ? 'mt-16 md:mt-0' : ''}`}>
-                         {/* [AQUI ENTRA A LÓGICA DE RENDERIZAÇÃO DAS VIEWS QUE VOCÊ JÁ TINHA] */}
-                         {view === 'dashboard' && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}
-                         {view === 'agenda' && <AgendaView title={appSettings.tabNames.agenda} category="Agenda Ministerial" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
-                         {/* ... repetir para as outras views ... */}
+                        {view === 'dashboard' && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}
+                        {view === 'agenda' && <AgendaView title={appSettings.tabNames.agenda} category="Agenda Ministerial" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
+                        {view === 'congressos' && <AgendaView title={appSettings.tabNames.congressos} category="Congressos" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
+                        {view === 'view_scale' && isAdmin && !isLeader && <ViewScaleView events={events} attendance={attendance} departments={departments} />}
+                        {view === 'depts' && <UserDepartments title={appSettings.tabNames.departments} departments={departments} userProfile={userData} />}
+                        {isAdmin && view === 'create_events' && !isLeader && <AdminCreateEventsView events={events} showToast={showToast} />}
+                        {isAdmin && view === 'manage_scales' && <AdminScalesView events={events} attendance={attendance} users={allUsers} departments={departments} showToast={showToast} isLeader={isLeader} />}
+                        {isAdmin && view === 'manage_team' && !isLeader && <AdminTeamView users={allUsers} departments={departments} showToast={showToast} />}
+                        {isAdmin && view === 'manage_depts' && !isLeader && <AdminDepartmentsView departments={departments} showToast={showToast} />}
+                        {isAdmin && view === 'reports' && !isLeader && <ReportsView title={appSettings.tabNames.reports} attendance={attendance} allUsers={allUsers} departments={departments} />}
+                        {isAdmin && view === 'admin_master' && !isLeader && <MasterSettingsView settings={appSettings} onUpdateSettings={handleUpdateSettings} showToast={showToast} />}
                     </main>
-
                     {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
                 </div>
             );
         }
 
-        // Funções auxiliares de View omitidas por brevidade, mas devem ser incluídas aqui.
-
         function NavItem({ active, iconName, label, onClick, open }) {
             return (
-                <button onClick={onClick} title={label} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${active ? 'bg-primary text-white shadow-lg shadow-blue-100' : 'text-gray-500 hover:bg-gray-100 hover:text-primary'}`}>
+                <button onClick={onClick} title={label} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
+                    active ? 'bg-primary text-white shadow-lg shadow-blue-100' : 'text-gray-500 hover:bg-gray-100 hover:text-primary'
+                }`}>
                     <div className="shrink-0"><Icon name={iconName} size={20} strokeWidth={active ? 3 : 2} /></div>
                     {open && <span className="text-[10px] font-black uppercase tracking-tight truncate">{label}</span>}
                 </button>

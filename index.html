@@ -27,15 +27,18 @@
         /* Animation Utilities */
         .animate-in { animation: fadeIn 0.3s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .animate-bar { animation: fillBar 1s ease-out forwards; }
+        @keyframes fillBar { from { width: 0%; } }
 
         /* Safe Area for Mobile */
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 80px); }
 
         /* Print Styles */
         @media print {
-            @page { margin: 1cm; size: A4; }
+            @page { margin: 0.5cm; size: A4; }
             .no-print { display: none !important; }
-            aside, header, button, .modal-overlay, .toast-container, nav { display: none !important; }
+            aside, header, button, .modal-overlay, .toast-container, nav, .filters-container { display: none !important; }
             main { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; overflow: visible !important; }
             body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             
@@ -89,7 +92,7 @@
 
         // --- Constants ---
         const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-        const YEARS = [2024, 2025, 2026, 2027];
+        const YEARS = [2024, 2025, 2026, 2027, 2028, 2029, 3030];
         
         // --- Utilities ---
         const Icon = ({ name, size = 20, className = "", strokeWidth = 2.5, style = {} }) => {
@@ -165,7 +168,7 @@
             return (
                 <div className="flex flex-col gap-4 no-print mb-6">
                     <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">{title}</h1>
-                    <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm self-start">
+                    <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm self-start filters-container">
                         {showDay && (
                             <select value={day || ""} onChange={e => setDay(e.target.value ? Number(e.target.value) : null)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
                                 <option value="">Todos os Dias</option>
@@ -182,6 +185,33 @@
                 </div>
             );
         }
+
+        // --- Progress Bar Component ---
+        const ProgressBar = ({ value, max, type = 'performance' }) => {
+            const percentage = Math.min(100, Math.max(0, (value / max) * 100));
+            
+            let colorClass = 'bg-gray-200';
+            
+            if (type === 'burden') {
+                if (value <= 2) colorClass = 'bg-green-500';
+                else if (value <= 5) colorClass = 'bg-yellow-500';
+                else colorClass = 'bg-red-500';
+            } else if (type === 'performance') {
+                const ratio = value / (max || 1);
+                if (ratio < 0.3) colorClass = 'bg-red-500';
+                else if (ratio < 0.7) colorClass = 'bg-yellow-500';
+                else colorClass = 'bg-emerald-500';
+            }
+
+            return (
+                <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                    <div 
+                        className={`h-full rounded-full ${colorClass} animate-bar shadow-sm`} 
+                        style={{ width: `${percentage}%` }}
+                    ></div>
+                </div>
+            );
+        };
 
         function StatCard({ title, value, iconName, iconColor }) {
             return (
@@ -247,7 +277,7 @@
                                 </div>
                                
                                 {error && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 animate-in"><Icon name="AlertCircle" size={14}/> {error}</div>}
-                               
+                                
                                 <button 
                                     type="submit" 
                                     disabled={isProcessing} 
@@ -262,8 +292,6 @@
                 </div>
             );
         }
-
-        // --- Views ---
 
         function DashboardView({ userProfile, attendance, events, settings }) {
             const [month, setMonth] = useState(new Date().getMonth());
@@ -323,32 +351,23 @@
             const [dayFilter, setDayFilter] = useState('all'); 
             const [expandedEvent, setExpandedEvent] = useState(null);
             const [showEscalatedOnly, setShowEscalatedOnly] = useState(false);
-            
             const [checkinEvent, setCheckinEvent] = useState(null);
             const [checkinCode, setCheckinCode] = useState("");
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date);
-                
                 if (showEscalatedOnly) {
                     const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
                     const isDateMatch = d.getUTCMonth() === Number(filterMonth) && d.getUTCFullYear() === Number(filterYear);
                     return isDateMatch && ev.scaleStatus === 'ready' && myAtt?.isEscalated;
                 }
-
                 if (d.getUTCMonth() !== Number(filterMonth) || d.getUTCFullYear() !== Number(filterYear)) return false;
-                
-                const isCorrectCategory = category === "Agenda Ministerial" 
-                    ? (!ev.category || ev.category === "Agenda Ministerial") 
-                    : ev.category === category;
-                
+                const isCorrectCategory = category === "Agenda Ministerial" ? (!ev.category || ev.category === "Agenda Ministerial") : ev.category === category;
                 if (!isCorrectCategory) return false;
-                
                 const dayOfWeek = d.getUTCDay(); 
                 if (dayFilter === 'week' && (dayOfWeek === 0 || dayOfWeek === 6)) return false;
                 if (dayFilter === 'saturday' && dayOfWeek !== 6) return false;
                 if (dayFilter === 'sunday' && dayOfWeek !== 0) return false;
-
                 return true;
             }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, filterMonth, filterYear, category, showEscalatedOnly, attendance, userProfile.uid, dayFilter]);
 
@@ -368,54 +387,25 @@
                 const now = new Date();
                 const deadline1 = checkinEvent.checkinDeadline ? new Date(checkinEvent.checkinDeadline) : null;
                 const deadline2 = checkinEvent.checkinDeadline2 ? new Date(checkinEvent.checkinDeadline2) : null;
-               
-                // Se já passou do prazo 2, não permite check-in (Ausente)
-                if (deadline2 && now > deadline2) {
-                    showToast("Prazo expirado. Contabilizado como Ausente.");
-                    return;
-                }
-
+                if (deadline2 && now > deadline2) { showToast("Prazo expirado. Contabilizado como Ausente."); return; }
                 const codeInput = checkinCode.trim().toUpperCase();
                 const eventCode = (checkinEvent.checkinCode || "").trim().toUpperCase();
-
-                if (codeInput !== eventCode) {
-                    showToast("Código inválido.");
-                    return;
-                }
-
-                let attendanceStatus = 'present'; // Check-in Ok
-                // Se passou do prazo 1 mas está dentro do prazo 2 (ou se não tem prazo 2 mas passou do 1)
-                // A regra: se deadline1 existe e passou -> atrasado.
-                if (deadline1 && now > deadline1) {
-                    attendanceStatus = 'late'; // Check-in Atrasado
-                }
-
+                if (codeInput !== eventCode) { showToast("Código inválido."); return; }
+                let attendanceStatus = 'present'; 
+                if (deadline1 && now > deadline1) { attendanceStatus = 'late'; }
                 const attId = `${checkinEvent.id}_${userProfile.uid}`;
                 try {
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), {
-                        hasCheckedIn: true,
-                        checkinTime: new Date().toISOString(),
-                        attendanceStatus: attendanceStatus
+                        hasCheckedIn: true, checkinTime: new Date().toISOString(), attendanceStatus: attendanceStatus
                     });
-                   
-                    if (attendanceStatus === 'late') {
-                        showToast("Check-in realizado com atraso.");
-                    } else {
-                        showToast("Check-in realizado com sucesso!");
-                    }
-                   
-                    setCheckinEvent(null);
-                    setCheckinCode("");
-                } catch (err) {
-                    console.error(err);
-                    showToast("Erro ao realizar check-in. Tente novamente.");
-                }
+                    if (attendanceStatus === 'late') { showToast("Check-in realizado com atraso."); } else { showToast("Check-in realizado com sucesso!"); }
+                    setCheckinEvent(null); setCheckinCode("");
+                } catch (err) { console.error(err); showToast("Erro ao realizar check-in. Tente novamente."); }
             };
 
             return (
                 <div className="space-y-6">
                     <FilterHeader title={title} month={filterMonth} setMonth={setFilterMonth} year={filterYear} setYear={setFilterYear} />
-                    
                     <div className="flex flex-col md:flex-row justify-between gap-4 no-print">
                         <div className="flex bg-white p-1 rounded-2xl border shadow-sm overflow-x-auto">
                             {[{ id: 'all', label: 'Todos' }, { id: 'week', label: 'Semana' }, { id: 'saturday', label: 'Sábado' }, { id: 'sunday', label: 'Domingo' }].map(f => (
@@ -423,101 +413,51 @@
                             ))}
                         </div>
                         <button onClick={() => setShowEscalatedOnly(!showEscalatedOnly)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl border-2 font-black uppercase text-[10px] transition-all ${showEscalatedOnly ? 'bg-green-600 border-green-600 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-400 hover:border-green-400 hover:text-green-600'}`}>
-                            <Icon name="ClipboardCheck" size={14} />
-                            {showEscalatedOnly ? "Minhas Escalas" : "Ver Minhas Escalas"}
+                            <Icon name="ClipboardCheck" size={14} /> {showEscalatedOnly ? "Minhas Escalas" : "Ver Minhas Escalas"}
                         </button>
                     </div>
-
                     <div className="grid grid-cols-1 gap-4">
                         {filteredEvents.map(ev => {
                             const myAtt = attendance.find(a => a.eventId === ev.id && a.userId === userProfile.uid);
                             const isReady = ev.scaleStatus === 'ready';
                             const isUserEscalated = myAtt?.isEscalated && isReady;
                             const pStyle = getPeriodStyle(ev.period);
-                            
                             const now = new Date();
                             const deadlineDate = ev.deadline ? new Date(ev.deadline) : null;
                             const isExpired = deadlineDate && now > deadlineDate;
-                            
-                            // Check-in logic
-                            // Checkin button logic: Show if escalated, not checked in, and within deadline 2 (or infinite if not set)
                             const checkinDeadline2 = ev.checkinDeadline2 ? new Date(ev.checkinDeadline2) : null;
                             const isCheckinExpired = checkinDeadline2 && now > checkinDeadline2;
                             const isCheckinOpen = isUserEscalated && !myAtt.hasCheckedIn && !isCheckinExpired;
 
                             return (
                                 <div key={ev.id} className={`bg-white rounded-[2rem] border p-5 shadow-sm transition-all flex flex-col md:flex-row items-center gap-4 md:gap-6 card-print ${isUserEscalated ? 'ring-2 ring-green-500 bg-green-50/10' : 'hover:border-primary/40'}`}>
-                                    {/* Date */}
                                     <div className="flex flex-row md:flex-col items-center justify-between md:justify-center p-2 md:p-0 w-full md:w-16 text-center shrink-0 border-b md:border-b-0 md:border-none pb-2 md:pb-0">
                                         <div className="md:hidden text-[10px] font-bold text-gray-400 uppercase">{new Date(ev.date).toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' }).replace('.','')}</div>
                                         <div className="flex items-center gap-2 md:flex-col md:gap-0 md:items-center">
                                              <span className="text-[10px] font-black uppercase text-gray-400 md:mb-1">{MONTHS[new Date(ev.date).getUTCMonth()].substring(0,3)}</span>
                                              <span className={`text-2xl md:text-3xl font-black leading-none ${isUserEscalated ? 'text-green-600' : 'text-gray-800'}`}>{new Date(ev.date).getUTCDate()}</span>
                                         </div>
-                                        <span className="hidden md:block text-[10px] font-black uppercase mt-1 text-blue-600">
-                                            {new Date(ev.date).toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' }).replace('.','')}
-                                        </span>
+                                        <span className="hidden md:block text-[10px] font-black uppercase mt-1 text-blue-600">{new Date(ev.date).toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' }).replace('.','')}</span>
                                     </div>
-
                                     <div className="hidden md:block w-px h-12 bg-gray-100"></div>
-
-                                    {/* Info */}
                                     <div className="flex-1 text-center md:text-left space-y-2 w-full">
                                         <h3 className="text-lg font-black uppercase text-gray-800 leading-tight">{ev.name}</h3>
                                         <div className="flex flex-wrap gap-2 justify-center md:justify-start text-[10px] font-bold text-gray-400 uppercase">
                                             <span className="flex items-center gap-1.5 bg-blue-100 text-blue-700 px-2 py-1 rounded"><Icon name="Clock" size={12}/> {ev.time}</span>
-                                            <span className={`flex items-center gap-1.5 px-2 py-1 rounded uppercase text-[9px] ${pStyle.bg} ${pStyle.text}`}>
-                                                <Icon name={pStyle.icon} size={12}/> {ev.period}
-                                            </span>
+                                            <span className={`flex items-center gap-1.5 px-2 py-1 rounded uppercase text-[9px] ${pStyle.bg} ${pStyle.text}`}><Icon name={pStyle.icon} size={12}/> {ev.period}</span>
                                             <span className="flex items-center gap-1.5"><Icon name="MapPin" size={12}/> {ev.location || "Sede"}</span>
                                         </div>
-                                       
-                                        {isUserEscalated && (
-                                            <div className="text-purple-600 text-[10px] font-bold uppercase flex items-center justify-center md:justify-start gap-1">
-                                                <Icon name="Briefcase" size={12}/> 
-                                                Escalado em: {myAtt.servingDept}
-                                            </div>
-                                        )}
-                                       
-                                        {ev.deadline && (
-                                            <div className="text-[9px] text-red-400 font-bold uppercase">
-                                                Prazo Disp.: {new Date(ev.deadline).toLocaleString()} 
-                                                {isExpired && !myAtt && <span className="ml-1 bg-red-100 text-red-600 px-1 rounded">Expirado</span>}
-                                            </div>
-                                        )}
+                                        {isUserEscalated && (<div className="text-purple-600 text-[10px] font-bold uppercase flex items-center justify-center md:justify-start gap-1"><Icon name="Briefcase" size={12}/> Escalado em: {myAtt.servingDept}</div>)}
+                                        {ev.deadline && (<div className="text-[9px] text-red-400 font-bold uppercase">Prazo Disp.: {new Date(ev.deadline).toLocaleString()} {isExpired && !myAtt && <span className="ml-1 bg-red-100 text-red-600 px-1 rounded">Expirado</span>}</div>)}
                                     </div>
-
-                                    {/* Action */}
                                     <div className="w-full md:w-auto shrink-0 no-print">
                                         {(myAtt && expandedEvent !== ev.id) ? (
                                             <div className="flex flex-col items-center md:items-end gap-2">
-                                                <span className={`px-4 py-1.5 rounded-lg font-black uppercase text-[9px] ${myAtt.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                    {myAtt.status === 'present' 
-                                                        ? (isUserEscalated ? (myAtt.role ? `Função: ${myAtt.role}` : 'Escalado') : myAtt.servingDept) 
-                                                        : 'Indisponível'}
-                                                </span>
-                                                 
-                                                {/* Check-in Status */}
-                                                {isCheckinOpen && (
-                                                    <button onClick={() => setCheckinEvent(ev)} className="flex items-center gap-1 bg-orange-100 text-orange-600 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-orange-200 transition animate-bounce">
-                                                        <Icon name="QrCode" size={12} /> Fazer Check-in
-                                                    </button>
-                                                )}
-                                                {myAtt.hasCheckedIn && (
-                                                    <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded ${myAtt.attendanceStatus === 'late' ? 'bg-yellow-100 text-yellow-700' : 'text-green-600'}`}>
-                                                        <Icon name={myAtt.attendanceStatus === 'late' ? "AlertTriangle" : "CheckCheck"} size={12} /> 
-                                                        {myAtt.attendanceStatus === 'late' ? "Check-in Atrasado" : "Check-in Ok"}
-                                                    </span>
-                                                )}
-                                                {!myAtt.hasCheckedIn && isCheckinExpired && isUserEscalated && (
-                                                    <span className="flex items-center gap-1 text-red-500 text-[9px] font-black uppercase bg-red-50 px-2 py-1 rounded">
-                                                        <Icon name="XCircle" size={12} /> Ausente (Prazo)
-                                                    </span>
-                                                )}
-
-                                                {!isReady && !isExpired && (
-                                                    <button onClick={() => setExpandedEvent(ev.id)} className="text-[9px] font-bold text-gray-400 hover:text-primary underline">Alterar</button>
-                                                )}
+                                                <span className={`px-4 py-1.5 rounded-lg font-black uppercase text-[9px] ${myAtt.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{myAtt.status === 'present' ? (isUserEscalated ? (myAtt.role ? `Função: ${myAtt.role}` : 'Escalado') : myAtt.servingDept) : 'Indisponível'}</span>
+                                                {isCheckinOpen && (<button onClick={() => setCheckinEvent(ev)} className="flex items-center gap-1 bg-orange-100 text-orange-600 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-orange-200 transition animate-bounce"><Icon name="QrCode" size={12} /> Fazer Check-in</button>)}
+                                                {myAtt.hasCheckedIn && (<span className={`flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded ${myAtt.attendanceStatus === 'late' ? 'bg-yellow-100 text-yellow-700' : 'text-green-600'}`}><Icon name={myAtt.attendanceStatus === 'late' ? "AlertTriangle" : "CheckCheck"} size={12} /> {myAtt.attendanceStatus === 'late' ? "Check-in Atrasado" : "Check-in Ok"}</span>)}
+                                                {!myAtt.hasCheckedIn && isCheckinExpired && isUserEscalated && (<span className="flex items-center gap-1 text-red-500 text-[9px] font-black uppercase bg-red-50 px-2 py-1 rounded"><Icon name="XCircle" size={12} /> Ausente (Prazo)</span>)}
+                                                {!isReady && !isExpired && (<button onClick={() => setExpandedEvent(ev.id)} className="text-[9px] font-bold text-gray-400 hover:text-primary underline">Alterar</button>)}
                                             </div>
                                         ) : expandedEvent === ev.id ? (
                                             <div className="grid grid-cols-2 gap-2 min-w-[200px]">
@@ -528,13 +468,7 @@
                                                 <button onClick={() => setExpandedEvent(null)} className="col-span-2 p-1 text-[9px] font-bold text-gray-400">Cancelar</button>
                                             </div>
                                         ) : (
-                                            <button 
-                                                onClick={() => setExpandedEvent(ev.id)} 
-                                                disabled={isExpired}
-                                                className={`w-full md:w-auto px-6 py-4 rounded-xl font-black text-[10px] uppercase shadow-lg transition-all ${isExpired ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' : 'bg-primary text-white shadow-blue-200 hover:bg-primary/90 active:scale-95'}`}
-                                            >
-                                                {isExpired ? 'Fechado' : 'Dar disponibilidade'}
-                                            </button>
+                                            <button onClick={() => setExpandedEvent(ev.id)} disabled={isExpired} className={`w-full md:w-auto px-6 py-4 rounded-xl font-black text-[10px] uppercase shadow-lg transition-all ${isExpired ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' : 'bg-primary text-white shadow-blue-200 hover:bg-primary/90 active:scale-95'}`}>{isExpired ? 'Fechado' : 'Dar disponibilidade'}</button>
                                         )}
                                     </div>
                                 </div>
@@ -542,26 +476,18 @@
                         })}
                         {filteredEvents.length === 0 && <p className="col-span-full py-20 text-center text-gray-300 font-black uppercase text-xs border-2 border-dashed rounded-[3rem]">Nenhum evento encontrado.</p>}
                     </div>
-
                     {checkinEvent && (
                         <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl animate-in">
                                 <div className="text-center mb-6">
-                                    <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-500">
-                                        <Icon name="QrCode" size={32} />
-                                    </div>
+                                    <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-500"><Icon name="QrCode" size={32} /></div>
                                     <h3 className="font-black uppercase text-lg text-gray-800">Check-in</h3>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase">{checkinEvent.name}</p>
                                 </div>
                                 <div className="space-y-4">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black uppercase text-gray-400">Código do Evento</label>
-                                        <input 
-                                            value={checkinCode} 
-                                            onChange={e => setCheckinCode(e.target.value.toUpperCase())} 
-                                            className="w-full p-4 bg-gray-50 rounded-xl font-black text-center text-xl outline-none border-2 border-transparent focus:border-orange-200 uppercase tracking-widest" 
-                                            placeholder="XXXX"
-                                        />
+                                        <input value={checkinCode} onChange={e => setCheckinCode(e.target.value.toUpperCase())} className="w-full p-4 bg-gray-50 rounded-xl font-black text-center text-xl outline-none border-2 border-transparent focus:border-orange-200 uppercase tracking-widest" placeholder="XXXX" />
                                     </div>
                                     <div className="flex gap-2">
                                         <button onClick={() => setCheckinEvent(null)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Cancelar</button>
@@ -584,14 +510,12 @@
 
             const filteredEvents = useMemo(() => events.filter(ev => {
                 const d = new Date(ev.date + 'T12:00:00');
-                
                 const catMatch = ev.category === filterCategory || (!ev.category && filterCategory === 'Agenda Ministerial');
                 const yearMatch = d.getFullYear() === Number(filterYear);
                 const monthMatch = d.getMonth() === Number(filterMonth);
                 const dayMatch = filterDay ? d.getDate() === Number(filterDay) : true;
                 const periodMatch = filterPeriod ? ev.period === filterPeriod : true;
                 const isPublished = ev.scaleStatus === 'ready';
-
                 return catMatch && yearMatch && monthMatch && dayMatch && periodMatch && isPublished;
             }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, filterCategory, filterDay, filterMonth, filterYear, filterPeriod]);
 
@@ -599,51 +523,26 @@
                 <div className="space-y-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Ver Escala Publicada</h1>
-                           
                         <div className="flex flex-col md:flex-row gap-4 items-end w-full md:w-auto no-print">
-                            <button onClick={() => window.print()} className="bg-gray-800 text-white px-4 py-2 rounded-xl font-bold uppercase text-[10px] flex items-center gap-2 hover:bg-gray-700 transition shadow-lg shadow-gray-200">
-                                <Icon name="Printer" size={16} /> Imprimir / Salvar PDF
-                            </button>
-
+                            <button onClick={() => window.print()} className="bg-gray-800 text-white px-4 py-2 rounded-xl font-bold uppercase text-[10px] flex items-center gap-2 hover:bg-gray-700 transition shadow-lg shadow-gray-200"><Icon name="Printer" size={16} /> Imprimir / Salvar PDF</button>
                             <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm">
-                                <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
-                                    <option value="Agenda Ministerial">Agenda</option>
-                                    <option value="Congressos">Congressos</option>
-                                </select>
-                                <select value={filterDay} onChange={e => setFilterDay(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
-                                    <option value="">Dia (Todos)</option>
-                                    {[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}
-                                </select>
-                                <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
-                                    {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                </select>
-                                <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">
-                                    {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
-                                <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800">
-                                    <option value="">Período (Todos)</option>
-                                    <option value="Manhã">Manhã</option>
-                                    <option value="Tarde">Tarde</option>
-                                    <option value="Noite">Noite</option>
-                                    <option value="Vigília">Vigília</option>
-                                </select>
+                                <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2"><option value="Agenda Ministerial">Agenda</option><option value="Congressos">Congressos</option></select>
+                                <select value={filterDay} onChange={e => setFilterDay(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2"><option value="">Dia (Todos)</option>{[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
+                                <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                                <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800 border-r pr-2">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                                <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-black uppercase outline-none px-2 cursor-pointer text-gray-800"><option value="">Período (Todos)</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option><option value="Noite">Noite</option><option value="Vigília">Vigília</option></select>
                             </div>
                         </div>
                     </div>
-
                     <div className="grid grid-cols-1 gap-6 print:block">
                         {filteredEvents.map(ev => {
                             const pStyle = getPeriodStyle(ev.period);
-                            // Get escalated volunteers for this event
                             const escalated = attendance.filter(a => a.eventId === ev.id && a.isEscalated);
-                            
-                            // Group by Dept
                             const byDept = {};
                             departments.forEach(d => {
                                 const vols = escalated.filter(a => a.servingDept === d.name);
                                 if (vols.length > 0) byDept[d.name] = { color: d.color, vols };
                             });
-
                             return (
                                 <div key={ev.id} className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden card-print">
                                     <div className="bg-gray-50 p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -673,9 +572,7 @@
                                                     </div>
                                                 ))}
                                             </div>
-                                        ) : (
-                                            <p className="text-center text-xs text-gray-400 font-bold uppercase py-4">Nenhum voluntário escalado ainda.</p>
-                                        )}
+                                        ) : (<p className="text-center text-xs text-gray-400 font-bold uppercase py-4">Nenhum voluntário escalado ainda.</p>)}
                                     </div>
                                 </div>
                             );
@@ -688,7 +585,6 @@
 
         function UserDepartments({ departments, userProfile, title }) {
             const myDepts = useMemo(() => departments.filter(d => userProfile.participatingDepts?.includes(d.id)), [departments, userProfile.participatingDepts]);
-            
             return (
                 <div className="space-y-6">
                     <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">{title}</h1>
@@ -696,9 +592,7 @@
                         {myDepts.map(d => (
                             <div key={d.id} className="bg-white p-8 rounded-[2.5rem] border-l-8 shadow-sm relative overflow-hidden group" style={{ borderLeftColor: d.color }}>
                                 <div className="flex justify-between items-start mb-6">
-                                    <div className="p-3 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: `${d.color}20`, color: d.color }}>
-                                         <Icon name="Briefcase" size={24} />
-                                    </div>
+                                    <div className="p-3 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: `${d.color}20`, color: d.color }}><Icon name="Briefcase" size={24} /></div>
                                     <span className="text-[10px] font-black text-green-500 uppercase tracking-widest">Ativo</span>
                                 </div>
                                 <h3 className="text-xl font-black uppercase tracking-tight mb-2 leading-none text-gray-800">{d.name}</h3>
@@ -716,116 +610,116 @@
             const [month, setMonth] = useState(new Date().getMonth());
             const [year, setYear] = useState(new Date().getFullYear());
             const [day, setDay] = useState(null);
-            
             const [search, setSearch] = useState("");
             const [selectedVolunteer, setSelectedVolunteer] = useState(null);
             const [selectedDeptReport, setSelectedDeptReport] = useState(null);
-
-            // Filtros de tempo para os modais de detalhes
+            const [showExportModal, setShowExportModal] = useState(false);
             const [detailMonth, setDetailMonth] = useState(new Date().getMonth());
             const [detailYear, setDetailYear] = useState(new Date().getFullYear());
             const [detailDay, setDetailDay] = useState(null);
+            const [detailCategory, setDetailCategory] = useState("all"); // Added category state
+            const [exportMonth, setExportMonth] = useState(new Date().getMonth());
+            const [exportYear, setExportYear] = useState(new Date().getFullYear());
+            const [exportDay, setExportDay] = useState(null);
 
-            // Sincronizar filtros iniciais do modal com os globais
-            useEffect(() => {
-                setDetailMonth(month);
-                setDetailYear(year);
-                setDetailDay(day);
-            }, [month, year, day, selectedVolunteer, selectedDeptReport]);
+            useEffect(() => { setDetailMonth(month); setDetailYear(year); setDetailDay(day); }, [month, year, day, selectedVolunteer, selectedDeptReport]);
 
-            const searchedUsers = useMemo(() => {
-                if (!search) return [];
-                return allUsers.filter(u => u.name.toLowerCase().includes(search.toLowerCase()));
-            }, [allUsers, search]);
+            const searchedUsers = useMemo(() => { if (!search) return []; return allUsers.filter(u => u.name.toLowerCase().includes(search.toLowerCase())); }, [allUsers, search]);
 
-            const getVolunteerStats = (userId, m, y, d) => {
-                let userAtt = attendance.filter(a => a.userId === userId); 
-               
-                userAtt = userAtt.filter(a => {
-                    const evtDate = new Date(a.eventDate);
-                    const sameMonth = evtDate.getUTCMonth() === Number(m);
-                    const sameYear = evtDate.getUTCFullYear() === Number(y);
+            const getVolunteerStats = (userId, m, y, d, cat) => {
+                let userAtt = attendance.filter(a => a.userId === userId);
+                userAtt = userAtt.filter(a => { 
+                    const evtDate = new Date(a.eventDate); 
+                    const sameMonth = evtDate.getUTCMonth() === Number(m); 
+                    const sameYear = evtDate.getUTCFullYear() === Number(y); 
                     const sameDay = d ? evtDate.getUTCDate() === Number(d) : true;
-                    return sameMonth && sameYear && sameDay;
+                    // Filter by category if selected
+                    const sameCat = cat && cat !== 'all' ? (a.eventCategory === cat) : true;
+                    return sameMonth && sameYear && sameDay && sameCat; 
                 });
-
+                
                 const avail = userAtt.filter(a => a.status === 'present').length;
                 const unavail = userAtt.filter(a => a.status === 'absent').length;
                 const escalated = userAtt.filter(a => a.isEscalated).length;
                 const lates = userAtt.filter(a => a.attendanceStatus === 'late').length;
-               
-                // Ausente = Escalado e (Status Absent OU (Não Checkin e Data Passou))
-                // Simplificação: Se está 'late', não conta 'absent'.
-                // Se está 'present' (Checkin OK), não conta 'absent'.
-                // Se a data já passou e não tem checkin, é absent.
-                const absents = userAtt.filter(a => {
-                    if (!a.isEscalated) return false;
-                    const passed = new Date() > new Date(a.eventDate + 'T23:59:59');
-                    // Se não tem checkin e a data passou -> falta
-                    if (!a.hasCheckedIn && passed) return true;
-                    // Se o status explicito é absent (ex: marcado manualmente)
-                    if (a.attendanceStatus === 'absent') return true;
-                    return false;
-                }).length;
-
+                const absents = userAtt.filter(a => { if (!a.isEscalated) return false; const passed = new Date() > new Date(a.eventDate + 'T23:59:59'); if (!a.hasCheckedIn && passed) return true; if (a.attendanceStatus === 'absent') return true; return false; }).length;
+                
                 const deptCounts = {};
-                userAtt.filter(a => a.status === 'present').forEach(a => {
+                const functionCounts = {};
+                userAtt.filter(a => a.isEscalated).forEach(a => {
                     deptCounts[a.servingDept] = (deptCounts[a.servingDept] || 0) + 1;
+                    if(a.role) { if(!functionCounts[a.servingDept]) functionCounts[a.servingDept] = {}; functionCounts[a.servingDept][a.role] = (functionCounts[a.servingDept][a.role] || 0) + 1; }
                 });
                 const sortedDepts = Object.entries(deptCounts).sort((a,b) => b[1] - a[1]);
-            
-                return { avail, unavail, escalated, lates, absents, topDepts: sortedDepts };
+                return { avail, unavail, escalated, lates, absents, topDepts: sortedDepts, functions: functionCounts };
             };
 
-            const getDeptStats = (deptName, m, y, d) => {
-                const deptAtts = attendance.filter(a => {
-                    const evtDate = new Date(a.eventDate);
-                    return a.servingDept === deptName && 
-                           evtDate.getUTCMonth() === Number(m) && 
-                           evtDate.getUTCFullYear() === Number(y) &&
-                           (d ? evtDate.getUTCDate() === Number(d) : true);
-                });
-               
+            const getDeptStats = (deptName, deptId, m, y, d) => {
+                const deptAtts = attendance.filter(a => { const evtDate = new Date(a.eventDate); return a.servingDept === deptName && evtDate.getUTCMonth() === Number(m) && evtDate.getUTCFullYear() === Number(y) && (d ? evtDate.getUTCDate() === Number(d) : true); });
                 const avail = deptAtts.filter(a => a.status === 'present').length;
                 const unavail = deptAtts.filter(a => a.status === 'absent').length;
                 const escalated = deptAtts.filter(a => a.isEscalated).length;
                 const lates = deptAtts.filter(a => a.attendanceStatus === 'late').length;
-
-                const absents = deptAtts.filter(a => {
-                    if (!a.isEscalated) return false;
-                    const passed = new Date() > new Date(a.eventDate + 'T23:59:59');
-                    if (!a.hasCheckedIn && passed) return true;
-                    if (a.attendanceStatus === 'absent') return true;
-                    return false;
-                }).length;
-
-                return { avail, unavail, escalated, lates, absents };
+                const absents = deptAtts.filter(a => { if (!a.isEscalated) return false; const passed = new Date() > new Date(a.eventDate + 'T23:59:59'); if (!a.hasCheckedIn && passed) return true; if (a.attendanceStatus === 'absent') return true; return false; }).length;
+                const memberIds = allUsers.filter(u => u.participatingDepts?.includes(deptId)).map(u => u.uid);
+                const memberStats = memberIds.map(uid => {
+                    const userEscalatedCount = deptAtts.filter(a => a.userId === uid && a.isEscalated).length;
+                    const user = allUsers.find(u => u.uid === uid);
+                    return { uid, name: user?.name, count: userEscalatedCount, photo: user?.imageUrl };
+                }).sort((a, b) => b.count - a.count);
+                return { avail, unavail, escalated, lates, absents, rankedVolunteers: memberStats };
             };
 
-            const volStats = selectedVolunteer ? getVolunteerStats(selectedVolunteer.uid, detailMonth, detailYear, detailDay) : null;
-            const deptStats = selectedDeptReport ? getDeptStats(selectedDeptReport.name, detailMonth, detailYear, detailDay) : null;
+            const volStats = selectedVolunteer ? getVolunteerStats(selectedVolunteer.uid, detailMonth, detailYear, detailDay, detailCategory) : null;
+            const deptStats = selectedDeptReport ? getDeptStats(selectedDeptReport.name, selectedDeptReport.id, detailMonth, detailYear, detailDay) : null;
+
+            const handleExport = () => {
+                const filteredData = attendance.filter(a => { const d = new Date(a.eventDate); const sameMonth = d.getUTCMonth() === Number(exportMonth); const sameYear = d.getUTCFullYear() === Number(exportYear); const sameDay = exportDay ? d.getUTCDate() === Number(exportDay) : true; return sameMonth && sameYear && sameDay; });
+                if (filteredData.length === 0) { alert("Sem dados para exportar neste período."); return; }
+                
+                // Use semicolon for Excel in Brazil and BOM for UTF-8
+                let csvContent = "Evento;Data;Departamento;Voluntário;Status;Check-in\n";
+                filteredData.forEach(row => {
+                    const statusStr = row.isEscalated ? (row.hasCheckedIn ? "Presente" : "Ausente") : (row.status === 'present' ? 'Disponível' : 'Indisponível');
+                    const checkinStr = row.checkinTime ? new Date(row.checkinTime).toLocaleString() : "-";
+                    const eventName = `"${row.eventName.replace(/"/g, '""')}"`;
+                    const dept = `"${row.servingDept.replace(/"/g, '""')}"`;
+                    const user = `"${row.userName.replace(/"/g, '""')}"`;
+                    csvContent += `${eventName};${new Date(row.eventDate).toLocaleDateString()};${dept};${user};${statusStr};${checkinStr}\n`;
+                });
+
+                const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", `relatorio_midia_${exportMonth+1}_${exportYear}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setShowExportModal(false);
+            };
 
             return (
                 <div className="space-y-8">
-                    <FilterHeader title={title} month={month} setMonth={setMonth} year={year} setYear={setYear} />
+                    <div className="flex justify-between items-center">
+                        <FilterHeader title={title} month={month} setMonth={setMonth} year={year} setYear={setYear} />
+                        <button onClick={() => setShowExportModal(true)} className="bg-green-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-green-200 hover:bg-green-700 transition flex items-center gap-2 mb-6"><Icon name="Download" size={16} /> Exportar Relatório</button>
+                    </div>
                     
-                    {/* Pesquisa Voluntário */}
                     <div className="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4">
                         <h3 className="font-black uppercase text-gray-800">Pesquisar Voluntários</h3>
                         <div className="relative">
                             <Icon name="Search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input 
-                                placeholder="Digite o nome..." 
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                                className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 text-gray-800" 
-                            />
+                            <input placeholder="Digite o nome..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 text-gray-800" />
                         </div>
                         {search && (
                             <div className="space-y-2">
                                 {searchedUsers.map(u => (
                                     <div key={u.uid} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl">
-                                        <span className="font-bold text-sm text-gray-800 uppercase">{u.name}</span>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden">{u.imageUrl ? <img src={u.imageUrl} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center font-bold text-gray-500">{u.name.charAt(0)}</div>}</div>
+                                            <span className="font-bold text-sm text-gray-800 uppercase">{u.name}</span>
+                                        </div>
                                         <button onClick={() => setSelectedVolunteer(u)} className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg text-[10px] font-black uppercase hover:bg-blue-200">Ver Detalhes</button>
                                     </div>
                                 ))}
@@ -834,113 +728,123 @@
                         )}
                     </div>
 
-                    {/* Departamentos */}
                     <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm">
                         <h3 className="text-xl font-black uppercase tracking-tight mb-6 text-gray-800">Presença por Departamento</h3>
                         <div className="space-y-4">
                             {departments.map(d => (
                                 <div key={d.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm" style={{ color: d.color }}>
-                                            <Icon name="Briefcase" size={20} />
-                                        </div>
-                                        <div>
-                                            <span className="font-black text-xs uppercase text-gray-700 block">{d.name}</span>
-                                        </div>
+                                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm" style={{ color: d.color }}><Icon name="Briefcase" size={20} /></div>
+                                        <div><span className="font-black text-xs uppercase text-gray-700 block">{d.name}</span></div>
                                     </div>
-                                    <button onClick={() => setSelectedDeptReport(d)} className="px-4 py-2 bg-white border border-gray-200 text-gray-500 rounded-xl text-[9px] font-black uppercase hover:text-primary hover:border-primary">
-                                        Ver Detalhes
-                                    </button>
+                                    <button onClick={() => setSelectedDeptReport(d)} className="px-4 py-2 bg-white border border-gray-200 text-gray-500 rounded-xl text-[9px] font-black uppercase hover:text-primary hover:border-primary">Ver Detalhes</button>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    {/* Modal Voluntário */}
                     {selectedVolunteer && volStats && (
-                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
-                            <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="font-black uppercase text-lg text-gray-800">{selectedVolunteer.name}</h3>
-                                    <button onClick={() => setSelectedVolunteer(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
-                                </div>
-                               
-                                {/* Filtros internos do modal */}
-                                <div className="flex gap-2 mb-6">
-                                    <select value={detailDay || ''} onChange={e => setDetailDay(e.target.value ? Number(e.target.value) : null)} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1"><option value="">Dia (Todos)</option>{[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
-                                    <select value={detailMonth} onChange={e => setDetailMonth(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
-                                    <select value={detailYear} onChange={e => setDetailYear(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4 mb-6">
-                                    <div className="p-4 bg-green-50 rounded-2xl text-center border border-green-100">
-                                        <span className="block text-2xl font-black text-green-600">{volStats.avail}</span>
-                                        <span className="text-[9px] font-bold uppercase text-green-800">Disponibilidades</span>
-                                    </div>
-                                    <div className="p-4 bg-red-50 rounded-2xl text-center border border-red-100">
-                                        <span className="block text-2xl font-black text-red-600">{volStats.unavail}</span>
-                                        <span className="text-[9px] font-bold uppercase text-red-800">Indisponibilidades</span>
-                                    </div>
-                                    <div className="p-4 bg-purple-50 rounded-2xl text-center border border-purple-100">
-                                        <span className="block text-2xl font-black text-purple-600">{volStats.escalated}</span>
-                                        <span className="text-[9px] font-bold uppercase text-purple-800">Vezes Escalado</span>
-                                    </div>
-                                    <div className="p-4 bg-gray-50 rounded-2xl text-center border border-gray-100">
-                                        <span className="block text-xl font-black text-gray-800 flex justify-center gap-4">
-                                            <span className="text-red-500">{volStats.absents}</span> / <span className="text-yellow-500">{volStats.lates}</span>
-                                        </span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Faltas / Atrasos</span>
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay overflow-y-auto">
+                            <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-0 shadow-2xl animate-in overflow-hidden relative my-8">
+                                <div className="h-40 bg-gradient-to-br from-blue-500 to-purple-600 relative">
+                                    <button onClick={() => setSelectedVolunteer(null)} className="absolute top-4 right-4 p-3 bg-white/20 text-white rounded-full hover:bg-white/40 backdrop-blur-md z-20 transition-colors shadow-lg"><Icon name="X" size={24} /></button>
+                                    <div className="absolute -bottom-16 left-1/2 -translate-x-1/2">
+                                        <div className="w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-gray-100">
+                                            {selectedVolunteer.imageUrl ? <img src={selectedVolunteer.imageUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-4xl font-black text-gray-300 uppercase">{selectedVolunteer.name.charAt(0)}</div>}
+                                        </div>
                                     </div>
                                 </div>
-                                <div>
-                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-2">Departamentos Mais Atuantes</h4>
-                                    <div className="flex flex-wrap gap-2">
+                                <div className="pt-20 px-8 pb-8 text-center">
+                                    <h2 className="text-2xl font-black uppercase text-gray-800 leading-none mb-1">{selectedVolunteer.name}</h2>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6">Voluntário</p>
+                                    <div className="flex flex-wrap gap-2 mb-8 justify-center">
+                                        <select value={detailCategory} onChange={e => setDetailCategory(e.target.value)} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none w-32"><option value="all">Todas Cats.</option><option value="Agenda Ministerial">Agenda</option><option value="Congressos">Congressos</option></select>
+                                        <select value={detailDay || ''} onChange={e => setDetailDay(e.target.value ? Number(e.target.value) : null)} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none w-20"><option value="">Dia</option>{[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
+                                        <select value={detailMonth} onChange={e => setDetailMonth(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none"><option value="">Mês</option>{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                                        <select value={detailYear} onChange={e => setDetailYear(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none w-20">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100"><span className="block text-2xl font-black text-gray-800">{volStats.avail}</span><span className="text-[9px] font-bold uppercase text-gray-400">Disp.</span></div>
+                                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100"><span className="block text-2xl font-black text-gray-800">{volStats.unavail}</span><span className="text-[9px] font-bold uppercase text-gray-400">Indisp.</span></div>
+                                        <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 md:col-span-2"><span className="block text-4xl font-black text-purple-600">{volStats.escalated}</span><span className="text-[10px] font-bold uppercase text-purple-400 tracking-widest">Escalações</span></div>
+                                        <div className="p-4 bg-red-50 rounded-2xl border border-red-100"><span className="block text-xl font-black text-red-500">{volStats.absents}</span><span className="text-[9px] font-bold uppercase text-red-300">Faltas</span></div>
+                                        <div className="p-4 bg-yellow-50 rounded-2xl border border-yellow-100"><span className="block text-xl font-black text-yellow-500">{volStats.lates}</span><span className="text-[9px] font-bold uppercase text-yellow-600">Atrasos</span></div>
+                                    </div>
+                                    <div className="mb-8 text-left">
+                                        <div className="flex justify-between mb-1"><span className="text-[10px] font-black uppercase text-gray-400">Nível de Carga</span><span className="text-[10px] font-bold text-gray-800">{volStats.escalated} Escalas</span></div>
+                                        <ProgressBar value={volStats.escalated} max={8} type="burden" />
+                                    </div>
+                                    <div className="text-left space-y-4">
+                                        <h4 className="font-black uppercase text-xs text-gray-800 border-b pb-2">Atuação por Departamento</h4>
                                         {volStats.topDepts.map(([dept, count]) => (
-                                            <span key={dept} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold uppercase border border-blue-100">
-                                                {dept}: {count}
-                                            </span>
+                                            <div key={dept} className="space-y-2">
+                                                <div className="flex justify-between items-center"><span className="text-xs font-bold text-gray-600 uppercase">{dept}</span><span className="text-[10px] font-black bg-gray-100 px-2 rounded text-gray-500">{count}x</span></div>
+                                                {volStats.functions[dept] && Object.entries(volStats.functions[dept]).map(([func, fCount]) => (
+                                                    <div key={func} className="pl-4 pr-2">
+                                                        <div className="flex justify-between mb-1"><span className="text-[9px] font-bold text-gray-400 uppercase">{func}</span><span className="text-[9px] font-bold text-gray-400">{fCount}</span></div>
+                                                        <ProgressBar value={fCount} max={count} type="performance" />
+                                                    </div>
+                                                ))}
+                                            </div>
                                         ))}
-                                        {volStats.topDepts.length === 0 && <span className="text-xs text-gray-300">Sem dados.</span>}
+                                        {volStats.topDepts.length === 0 && <p className="text-center text-xs text-gray-300 italic">Sem dados de escalação.</p>}
                                     </div>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* Modal Departamento */}
                     {selectedDeptReport && deptStats && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
-                            <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in">
+                            <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="font-black uppercase text-lg text-gray-800" style={{ color: selectedDeptReport.color }}>{selectedDeptReport.name}</h3>
                                     <button onClick={() => setSelectedDeptReport(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
                                 </div>
-                               
                                 <div className="flex gap-2 mb-6">
                                     <select value={detailDay || ''} onChange={e => setDetailDay(e.target.value ? Number(e.target.value) : null)} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1"><option value="">Dia (Todos)</option>{[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
                                     <select value={detailMonth} onChange={e => setDetailMonth(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
                                     <select value={detailYear} onChange={e => setDetailYear(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
                                 </div>
-
                                 <div className="grid grid-cols-2 gap-4 mb-6">
-                                    <div className="p-4 bg-green-50 rounded-2xl text-center border border-green-100">
-                                        <span className="block text-2xl font-black text-green-600">{deptStats.avail}</span>
-                                        <span className="text-[9px] font-bold uppercase text-green-800">Disponibilidades</span>
+                                    <div className="p-4 bg-green-50 rounded-2xl text-center border border-green-100"><span className="block text-2xl font-black text-green-600">{deptStats.avail}</span><span className="text-[9px] font-bold uppercase text-green-800">Disponibilidades</span></div>
+                                    <div className="p-4 bg-red-50 rounded-2xl text-center border border-red-100"><span className="block text-2xl font-black text-red-600">{deptStats.unavail}</span><span className="text-[9px] font-bold uppercase text-red-800">Indisponibilidades</span></div>
+                                    <div className="p-4 bg-purple-50 rounded-2xl text-center border border-purple-100"><span className="block text-2xl font-black text-purple-600">{deptStats.escalated}</span><span className="text-[9px] font-bold uppercase text-purple-800">Escalações</span></div>
+                                    <div className="p-4 bg-gray-50 rounded-2xl text-center border border-gray-100"><span className="block text-xl font-black text-gray-800 flex justify-center gap-4"><span className="text-red-500">{deptStats.absents}</span> / <span className="text-yellow-500">{deptStats.lates}</span></span><span className="text-[9px] font-bold uppercase text-gray-400">Faltas / Atrasos</span></div>
+                                </div>
+                                <div>
+                                    <h4 className="font-black uppercase text-xs text-gray-400 mb-4 border-b pb-2">Ranking de Atividade (Escalações)</h4>
+                                    <div className="space-y-2">
+                                        {deptStats.rankedVolunteers.map((v, index) => (
+                                            <div key={v.uid} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] ${index < 3 ? 'bg-yellow-400 text-yellow-900' : 'bg-gray-200 text-gray-500'}`}>{index + 1}</div>
+                                                    <div className="w-8 h-8 rounded-full bg-white overflow-hidden border border-gray-200">{v.photo ? <img src={v.photo} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center font-bold text-gray-400 text-xs">{v.name?.charAt(0)}</div>}</div>
+                                                    <span className="text-xs font-bold text-gray-700 uppercase">{v.name}</span>
+                                                </div>
+                                                <span className="text-[10px] font-black bg-purple-100 text-purple-600 px-2 py-1 rounded">{v.count}x</span>
+                                            </div>
+                                        ))}
+                                        {deptStats.rankedVolunteers.length === 0 && <p className="text-center text-xs text-gray-300 italic">Nenhum membro neste departamento.</p>}
                                     </div>
-                                    <div className="p-4 bg-red-50 rounded-2xl text-center border border-red-100">
-                                        <span className="block text-2xl font-black text-red-600">{deptStats.unavail}</span>
-                                        <span className="text-[9px] font-bold uppercase text-red-800">Indisponibilidades</span>
-                                    </div>
-                                    <div className="p-4 bg-purple-50 rounded-2xl text-center border border-purple-100">
-                                        <span className="block text-2xl font-black text-purple-600">{deptStats.escalated}</span>
-                                        <span className="text-[9px] font-bold uppercase text-purple-800">Escalações</span>
-                                    </div>
-                                    <div className="p-4 bg-gray-50 rounded-2xl text-center border border-gray-100">
-                                        <span className="block text-xl font-black text-gray-800 flex justify-center gap-4">
-                                            <span className="text-red-500">{deptStats.absents}</span> / <span className="text-yellow-500">{deptStats.lates}</span>
-                                        </span>
-                                        <span className="text-[9px] font-bold uppercase text-gray-400">Faltas / Atrasos</span>
-                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showExportModal && (
+                        <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl animate-in text-center">
+                                <h3 className="text-xl font-black uppercase text-gray-800 mb-2">Exportar Relatório</h3>
+                                <p className="text-xs text-gray-500 font-medium mb-6">Selecione o período para exportar os dados.</p>
+                                <div className="flex flex-col gap-3 mb-6">
+                                    <select value={exportDay || ""} onChange={e => setExportDay(e.target.value ? Number(e.target.value) : null)} className="bg-gray-50 p-3 rounded-xl font-bold text-sm outline-none text-gray-800"><option value="">Dia (Todos)</option>{[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
+                                    <select value={exportMonth} onChange={e => setExportMonth(Number(e.target.value))} className="bg-gray-50 p-3 rounded-xl font-bold text-sm outline-none text-gray-800">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                                    <select value={exportYear} onChange={e => setExportYear(Number(e.target.value))} className="bg-gray-50 p-3 rounded-xl font-bold text-sm outline-none text-gray-800">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setShowExportModal(false)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Cancelar</button>
+                                    <button onClick={handleExport} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-green-200">Baixar CSV</button>
                                 </div>
                             </div>
                         </div>
@@ -950,7 +854,6 @@
         }
 
         // --- Admin Operational Components ---
-        
         function AdminCreateEventsView({ events, showToast }) {
             const [editingId, setEditingId] = useState(null);
             const [form, setForm] = useState({ name: '', date: '', time: '', period: 'Noite', location: '', category: 'Agenda Ministerial', deadline: '', checkinCode: '', checkinDeadline: '', checkinDeadline2: '' });
@@ -1053,7 +956,7 @@
                                 <label className="text-[10px] font-black text-gray-400 uppercase">Prazo para Disponibilidade</label>
                                 <input type="datetime-local" value={form.deadline} onChange={e => setForm({...form, deadline: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />
                             </div>
-                           
+                            
                             <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-gray-100 pt-4">
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-1"><Icon name="QrCode" size={12}/> Código de Check-in</label>
@@ -1159,19 +1062,13 @@
 
             const forceStatus = async (attId, newStatus) => {
                 try {
-                    // newStatus: 'present' (OK), 'late' (Atrasado), 'absent' (Ausente)
-                    // hasCheckedIn: true if present/late, false if absent
                     const updates = { 
                         attendanceStatus: newStatus,
                         hasCheckedIn: newStatus !== 'absent'
                     };
                     if (newStatus !== 'absent') {
                         updates.checkinTime = new Date().toISOString();
-                    } else {
-                        // Remove checkin time if marking as absent manually? Or keep history?
-                        // Keeping simple for now
                     }
-
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', attId), updates);
                     showToast(`Status atualizado para ${newStatus}.`);
                 } catch(e) { console.error(e); }
@@ -1181,10 +1078,8 @@
                 const eventAtts = attendance.filter(a => a.eventId === eventId);
                 const present = eventAtts.filter(a => a.status === 'present');
                 const absent = eventAtts.filter(a => a.status === 'absent');
-            
                 const respondedIds = eventAtts.map(a => a.userId);
                 const pendingUsers = users.filter(u => !respondedIds.includes(u.uid) && u.role !== 'master');
-
                 return { present, absent, pendingUsers };
             };
 
@@ -1193,14 +1088,9 @@
                 const grouped = {};
                 escalated.forEach(a => {
                     if (!grouped[a.servingDept]) grouped[a.servingDept] = { present: [], late: [], absent: [] };
-                   
-                    if (a.attendanceStatus === 'late') {
-                        grouped[a.servingDept].late.push(a);
-                    } else if (a.hasCheckedIn || a.attendanceStatus === 'present') {
-                        grouped[a.servingDept].present.push(a);
-                    } else {
-                        grouped[a.servingDept].absent.push(a);
-                    }
+                    if (a.attendanceStatus === 'late') { grouped[a.servingDept].late.push(a); } 
+                    else if (a.hasCheckedIn || a.attendanceStatus === 'present') { grouped[a.servingDept].present.push(a); } 
+                    else { grouped[a.servingDept].absent.push(a); }
                 });
                 return grouped;
             };
@@ -1210,25 +1100,14 @@
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4 no-print">
                         <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Gerenciar Escalas</h1>
                         <div className="flex gap-2 flex-wrap justify-end">
-                            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer">
-                                <option value="all">Todas as Categorias</option>
-                                <option value="Agenda Ministerial">Agenda & Escalas</option>
-                                <option value="Congressos">Congressos</option>
-                            </select>
-                            <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer">
-                                {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                            </select>
-                            <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer">
-                                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                            </select>
+                            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer"><option value="all">Todas as Categorias</option><option value="Agenda Ministerial">Agenda & Escalas</option><option value="Congressos">Congressos</option></select>
+                            <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                            <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
                         </div>
                     </div>
-
                     <div className="space-y-4">
                         {filteredEvents.map(ev => {
                             const { present, absent, pendingUsers } = getEventLists(ev.id);
-                            
-                            // Date formatting for Admin Scale View
                             const dateObj = new Date(ev.date + 'T12:00:00');
                             const weekDay = dateObj.toLocaleDateString('pt-BR', { weekday: 'long' });
                             const weekDayCap = weekDay.charAt(0).toUpperCase() + weekDay.slice(1);
@@ -1237,52 +1116,23 @@
                             return (
                                 <div key={ev.id} className="bg-white p-6 rounded-[2rem] border shadow-sm">
                                     <div className="flex flex-col md:flex-row items-center gap-6">
-                                        <div className="bg-primary/5 text-primary p-4 rounded-2xl w-24 text-center shrink-0 flex flex-col items-center justify-center border border-primary/10">
-                                            <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Dia</span>
-                                            <span className="text-4xl font-black leading-none">{dateObj.getDate()}</span>
-                                        </div>
+                                        <div className="bg-primary/5 text-primary p-4 rounded-2xl w-24 text-center shrink-0 flex flex-col items-center justify-center border border-primary/10"><span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Dia</span><span className="text-4xl font-black leading-none">{dateObj.getDate()}</span></div>
                                         <div className="flex-1 text-center md:text-left">
-                                            <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
-                                                <h3 className="font-black text-xl uppercase text-gray-800">{ev.name}</h3>
-                                                <span className="text-[9px] font-bold uppercase bg-gray-100 px-2 py-0.5 rounded border">{ev.category === 'Congressos' ? 'Congressos' : 'Agenda'}</span>
-                                            </div>
+                                            <div className="flex items-center justify-center md:justify-start gap-2 mb-2"><h3 className="font-black text-xl uppercase text-gray-800">{ev.name}</h3><span className="text-[9px] font-bold uppercase bg-gray-100 px-2 py-0.5 rounded border">{ev.category === 'Congressos' ? 'Congressos' : 'Agenda'}</span></div>
                                             <div className="flex flex-wrap justify-center md:justify-start gap-2 text-[10px] font-black uppercase mt-1">
-                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
-                                                    <Icon name="Calendar" size={13} /> {weekDayCap}, {dateObj.toLocaleDateString('pt-BR')}
-                                                </span>
-                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-500 rounded-xl border border-gray-100">
-                                                    <Icon name="Clock" size={13} /> {ev.time}
-                                                </span>
-                                                <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-transparent ${pStyle.bg} ${pStyle.text}`}>
-                                                    <Icon name={pStyle.icon} size={13} /> {ev.period}
-                                                </span>
-                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-500 rounded-xl border border-gray-100">
-                                                    <Icon name="MapPin" size={13} /> {ev.location || "Sede"}
-                                                </span>
+                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100"><Icon name="Calendar" size={13} /> {weekDayCap}, {dateObj.toLocaleDateString('pt-BR')}</span>
+                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-500 rounded-xl border border-gray-100"><Icon name="Clock" size={13} /> {ev.time}</span>
+                                                <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-transparent ${pStyle.bg} ${pStyle.text}`}><Icon name={pStyle.icon} size={13} /> {ev.period}</span>
+                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-500 rounded-xl border border-gray-100"><Icon name="MapPin" size={13} /> {ev.location || "Sede"}</span>
                                             </div>
                                         </div>
                                         <div className="flex flex-col gap-2 w-full md:w-auto">
                                             <div className="flex gap-2">
-                                                <button onClick={() => setStatsModalEvent(ev)} className="flex-1 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100 transition flex items-center justify-center gap-2">
-                                                    <Icon name="BarChart2" size={14} /> 
-                                                    Status ({present.length}/{present.length + absent.length + pendingUsers.length})
-                                                </button>
-                                                {!isLeader && (
-                                                    <button onClick={() => setCheckinReportEvent(ev)} className="flex-1 px-4 py-3 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black uppercase hover:bg-orange-100 transition flex items-center justify-center gap-2">
-                                                        <Icon name="QrCode" size={14} /> 
-                                                        Ver Check-in
-                                                    </button>
-                                                )}
+                                                <button onClick={() => setStatsModalEvent(ev)} className="flex-1 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100 transition flex items-center justify-center gap-2"><Icon name="BarChart2" size={14} /> Status ({present.length}/{present.length + absent.length + pendingUsers.length})</button>
+                                                {!isLeader && (<button onClick={() => setCheckinReportEvent(ev)} className="flex-1 px-4 py-3 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black uppercase hover:bg-orange-100 transition flex items-center justify-center gap-2"><Icon name="QrCode" size={14} /> Ver Check-in</button>)}
                                             </div>
-                                            <button onClick={() => { setScaleModalEvent(ev); setScaleModalDept(departments[0]?.name); }} className="px-4 py-3 bg-purple-50 text-purple-600 rounded-xl text-[10px] font-black uppercase hover:bg-purple-100 transition flex items-center justify-center gap-2">
-                                                <Icon name="Users" size={14} /> Montar Escala
-                                            </button>
-                                            {!isLeader && (
-                                                <button onClick={() => toggleScale(ev)} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase transition flex items-center justify-center gap-2 ${ev.scaleStatus === 'ready' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                                                    <Icon name={ev.scaleStatus === 'ready' ? 'Eye' : 'EyeOff'} size={14} />
-                                                    {ev.scaleStatus === 'ready' ? 'Escala Publicada' : 'Rascunho'}
-                                                </button>
-                                            )}
+                                            <button onClick={() => { setScaleModalEvent(ev); setScaleModalDept(departments[0]?.name); }} className="px-4 py-3 bg-purple-50 text-purple-600 rounded-xl text-[10px] font-black uppercase hover:bg-purple-100 transition flex items-center justify-center gap-2"><Icon name="Users" size={14} /> Montar Escala</button>
+                                            {!isLeader && (<button onClick={() => toggleScale(ev)} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase transition flex items-center justify-center gap-2 ${ev.scaleStatus === 'ready' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}><Icon name={ev.scaleStatus === 'ready' ? 'Eye' : 'EyeOff'} size={14} /> {ev.scaleStatus === 'ready' ? 'Escala Publicada' : 'Rascunho'}</button>)}
                                         </div>
                                     </div>
                                 </div>
@@ -1290,45 +1140,19 @@
                         })}
                          {filteredEvents.length === 0 && <p className="text-center py-8 text-xs font-bold text-gray-300 uppercase">Nenhum evento encontrado com os filtros selecionados.</p>}
                     </div>
-
                     {statsModalEvent && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div>
-                                        <h3 className="font-black uppercase text-lg text-gray-800">Status de Disponibilidade</h3>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase">{statsModalEvent.name}</p>
-                                    </div>
-                                    <button onClick={() => setStatsModalEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
-                                </div>
+                                <div className="flex justify-between items-center mb-6"><div><h3 className="font-black uppercase text-lg text-gray-800">Status de Disponibilidade</h3><p className="text-[10px] font-bold text-gray-400 uppercase">{statsModalEvent.name}</p></div><button onClick={() => setStatsModalEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button></div>
                                 {(() => {
                                     const { present, absent, pendingUsers } = getEventLists(statsModalEvent.id);
                                     return (
                                         <div className="space-y-6">
-                                            <div className="flex p-1 bg-gray-100 rounded-xl">
-                                                {[ { id: 'present', label: `Disponíveis (${present.length})` }, { id: 'absent', label: `Indisponíveis (${absent.length})` }, { id: 'pending', label: `Pendentes (${pendingUsers.length})` } ].map(tab => (
-                                                    <button key={tab.id} onClick={() => setStatsTab(tab.id)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${statsTab === tab.id ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}>{tab.label}</button>
-                                                ))}
-                                            </div>
+                                            <div className="flex p-1 bg-gray-100 rounded-xl">{[ { id: 'present', label: `Disponíveis (${present.length})` }, { id: 'absent', label: `Indisponíveis (${absent.length})` }, { id: 'pending', label: `Pendentes (${pendingUsers.length})` } ].map(tab => (<button key={tab.id} onClick={() => setStatsTab(tab.id)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${statsTab === tab.id ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}>{tab.label}</button>))}</div>
                                             <div className="max-h-[300px] overflow-y-auto space-y-2">
-                                                {statsTab === 'present' && present.map(p => (
-                                                    <div key={p.id} className="flex justify-between items-center p-3 bg-green-50 rounded-xl border border-green-100">
-                                                        <span className="font-bold text-xs uppercase text-green-800">{p.userName}</span>
-                                                        <span className="text-[9px] font-black uppercase bg-white px-2 py-0.5 rounded text-green-600">{p.servingDept}</span>
-                                                    </div>
-                                                ))}
-                                                {statsTab === 'absent' && absent.map(a => (
-                                                    <div key={a.id} className="flex justify-between items-center p-3 bg-red-50 rounded-xl border border-red-100">
-                                                        <span className="font-bold text-xs uppercase text-red-800">{a.userName}</span>
-                                                        <span className="text-[9px] font-black uppercase bg-white px-2 py-0.5 rounded text-red-400">Ausente</span>
-                                                    </div>
-                                                ))}
-                                                {statsTab === 'pending' && pendingUsers.map(u => (
-                                                    <div key={u.uid} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                                        <span className="font-bold text-xs uppercase text-gray-600">{u.name}</span>
-                                                        <span className="text-[9px] font-black uppercase bg-white px-2 py-0.5 rounded text-gray-400">Aguardando</span>
-                                                    </div>
-                                                ))}
+                                                {statsTab === 'present' && present.map(p => (<div key={p.id} className="flex justify-between items-center p-3 bg-green-50 rounded-xl border border-green-100"><span className="font-bold text-xs uppercase text-green-800">{p.userName}</span><span className="text-[9px] font-black uppercase bg-white px-2 py-0.5 rounded text-green-600">{p.servingDept}</span></div>))}
+                                                {statsTab === 'absent' && absent.map(a => (<div key={a.id} className="flex justify-between items-center p-3 bg-red-50 rounded-xl border border-red-100"><span className="font-bold text-xs uppercase text-red-800">{a.userName}</span><span className="text-[9px] font-black uppercase bg-white px-2 py-0.5 rounded text-red-400">Ausente</span></div>))}
+                                                {statsTab === 'pending' && pendingUsers.map(u => (<div key={u.uid} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="font-bold text-xs uppercase text-gray-600">{u.name}</span><span className="text-[9px] font-black uppercase bg-white px-2 py-0.5 rounded text-gray-400">Aguardando</span></div>))}
                                             </div>
                                         </div>
                                     );
@@ -1336,66 +1160,18 @@
                             </div>
                         </div>
                     )}
-
                     {checkinReportEvent && !isLeader && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div>
-                                        <h3 className="font-black uppercase text-lg text-gray-800">Relatório de Check-in</h3>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase">{checkinReportEvent.name}</p>
-                                    </div>
-                                    <button onClick={() => setCheckinReportEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
-                                </div>
+                                <div className="flex justify-between items-center mb-6"><div><h3 className="font-black uppercase text-lg text-gray-800">Relatório de Check-in</h3><p className="text-[10px] font-bold text-gray-400 uppercase">{checkinReportEvent.name}</p></div><button onClick={() => setCheckinReportEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button></div>
                                 <div className="space-y-6">
                                     {Object.entries(getCheckinReport(checkinReportEvent.id)).map(([deptName, data]) => (
                                         <div key={deptName} className="border-b border-gray-100 pb-4 last:border-0">
                                             <h4 className="font-black uppercase text-xs text-gray-800 mb-2">{deptName}</h4>
                                             <div className="grid grid-cols-3 gap-2">
-                                                {/* Presentes */}
-                                                <div className="bg-green-50 p-2 rounded-xl">
-                                                    <p className="text-[9px] font-black text-green-500 uppercase mb-1">Presentes ({data.present.length})</p>
-                                                    {data.present.map(p => (
-                                                        <div key={p.id} className="flex justify-between items-center mb-1">
-                                                            <span className="text-[10px] font-bold text-green-800">{p.userName}</span>
-                                                            <div className="flex gap-1">
-                                                                <button title="Mover para Atrasado" onClick={() => forceStatus(p.id, 'late')} className="text-[8px] bg-white border border-yellow-200 text-yellow-500 px-1 py-0.5 rounded hover:bg-yellow-100"><Icon name="Clock" size={8}/></button>
-                                                                <button title="Mover para Ausente" onClick={() => forceStatus(p.id, 'absent')} className="text-[8px] bg-white border border-red-200 text-red-500 px-1 py-0.5 rounded hover:bg-red-100"><Icon name="X" size={8}/></button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    {data.present.length === 0 && <span className="text-[9px] text-green-300 italic">Ninguém</span>}
-                                                </div>
-                                                 
-                                                {/* Atrasados */}
-                                                <div className="bg-yellow-50 p-2 rounded-xl">
-                                                    <p className="text-[9px] font-black text-yellow-600 uppercase mb-1">Atrasados ({data.late.length})</p>
-                                                    {data.late.map(p => (
-                                                        <div key={p.id} className="flex justify-between items-center mb-1">
-                                                            <span className="text-[10px] font-bold text-yellow-800">{p.userName}</span>
-                                                            <div className="flex gap-1">
-                                                                <button title="Mover para Presente" onClick={() => forceStatus(p.id, 'present')} className="text-[8px] bg-white border border-green-200 text-green-500 px-1 py-0.5 rounded hover:bg-green-100"><Icon name="Check" size={8}/></button>
-                                                                <button title="Mover para Ausente" onClick={() => forceStatus(p.id, 'absent')} className="text-[8px] bg-white border border-red-200 text-red-500 px-1 py-0.5 rounded hover:bg-red-100"><Icon name="X" size={8}/></button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    {data.late.length === 0 && <span className="text-[9px] text-yellow-300 italic">Ninguém</span>}
-                                                </div>
-
-                                                {/* Ausentes */}
-                                                <div className="bg-red-50 p-2 rounded-xl">
-                                                    <p className="text-[9px] font-black text-red-500 uppercase mb-1">Ausentes ({data.absent.length})</p>
-                                                    {data.absent.map(a => (
-                                                        <div key={a.id} className="flex justify-between items-center mb-1">
-                                                            <span className="text-[10px] font-bold text-red-800">{a.userName}</span>
-                                                            <div className="flex gap-1">
-                                                                <button title="Mover para Presente" onClick={() => forceStatus(a.id, 'present')} className="text-[8px] bg-white border border-green-200 text-green-500 px-1 py-0.5 rounded hover:bg-green-100"><Icon name="Check" size={8}/></button>
-                                                                <button title="Mover para Atrasado" onClick={() => forceStatus(a.id, 'late')} className="text-[8px] bg-white border border-yellow-200 text-yellow-500 px-1 py-0.5 rounded hover:bg-yellow-100"><Icon name="Clock" size={8}/></button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    {data.absent.length === 0 && <span className="text-[9px] text-red-300 italic">Ninguém</span>}
-                                                </div>
+                                                <div className="bg-green-50 p-2 rounded-xl"><p className="text-[9px] font-black text-green-500 uppercase mb-1">Presentes ({data.present.length})</p>{data.present.map(p => (<div key={p.id} className="flex justify-between items-center mb-1"><span className="text-[10px] font-bold text-green-800">{p.userName}</span><div className="flex gap-1"><button title="Mover para Atrasado" onClick={() => forceStatus(p.id, 'late')} className="text-[8px] bg-white border border-yellow-200 text-yellow-500 px-1 py-0.5 rounded hover:bg-yellow-100"><Icon name="Clock" size={8}/></button><button title="Mover para Ausente" onClick={() => forceStatus(p.id, 'absent')} className="text-[8px] bg-white border border-red-200 text-red-500 px-1 py-0.5 rounded hover:bg-red-100"><Icon name="X" size={8}/></button></div></div>))}</div>
+                                                <div className="bg-yellow-50 p-2 rounded-xl"><p className="text-[9px] font-black text-yellow-600 uppercase mb-1">Atrasados ({data.late.length})</p>{data.late.map(p => (<div key={p.id} className="flex justify-between items-center mb-1"><span className="text-[10px] font-bold text-yellow-800">{p.userName}</span><div className="flex gap-1"><button title="Mover para Presente" onClick={() => forceStatus(p.id, 'present')} className="text-[8px] bg-white border border-green-200 text-green-500 px-1 py-0.5 rounded hover:bg-green-100"><Icon name="Check" size={8}/></button><button title="Mover para Ausente" onClick={() => forceStatus(p.id, 'absent')} className="text-[8px] bg-white border border-red-200 text-red-500 px-1 py-0.5 rounded hover:bg-red-100"><Icon name="X" size={8}/></button></div></div>))}</div>
+                                                <div className="bg-red-50 p-2 rounded-xl"><p className="text-[9px] font-black text-red-500 uppercase mb-1">Ausentes ({data.absent.length})</p>{data.absent.map(a => (<div key={a.id} className="flex justify-between items-center mb-1"><span className="text-[10px] font-bold text-red-800">{a.userName}</span><div className="flex gap-1"><button title="Mover para Presente" onClick={() => forceStatus(a.id, 'present')} className="text-[8px] bg-white border border-green-200 text-green-500 px-1 py-0.5 rounded hover:bg-green-100"><Icon name="Check" size={8}/></button><button title="Mover para Atrasado" onClick={() => forceStatus(a.id, 'late')} className="text-[8px] bg-white border border-yellow-200 text-yellow-500 px-1 py-0.5 rounded hover:bg-yellow-100"><Icon name="Clock" size={8}/></button></div></div>))}</div>
                                             </div>
                                         </div>
                                     ))}
@@ -1404,31 +1180,23 @@
                             </div>
                         </div>
                     )}
-
                     {scaleModalEvent && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-4xl p-8 shadow-2xl animate-in max-h-[90vh] overflow-hidden flex flex-col">
                                 <div className="flex justify-between items-center mb-6 flex-shrink-0">
-                                    <div>
-                                        <h3 className="font-black uppercase text-lg text-gray-800">Montar Escala</h3>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase">{scaleModalEvent.name} • {new Date(scaleModalEvent.date).toLocaleDateString()}</p>
-                                    </div>
+                                    <div><h3 className="font-black uppercase text-lg text-gray-800">Montar Escala</h3><p className="text-[10px] font-bold text-gray-400 uppercase">{scaleModalEvent.name} • {new Date(scaleModalEvent.date).toLocaleDateString()}</p></div>
                                     <button onClick={() => setScaleModalEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
                                 </div>
                                 <div className="flex flex-1 overflow-hidden gap-6">
                                     <div className="w-1/3 overflow-y-auto space-y-2 pr-2">
                                         {departments.map(d => (
                                             <button key={d.id} onClick={() => setScaleModalDept(d.name)} className={`w-full text-left p-4 rounded-xl border-2 transition-all flex justify-between items-center ${scaleModalDept === d.name ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-100 text-gray-500 hover:border-gray-200'}`}>
-                                                <span className="font-black text-xs uppercase">{d.name}</span>
-                                                <Icon name="ChevronRight" size={14} />
+                                                <span className="font-black text-xs uppercase">{d.name}</span><Icon name="ChevronRight" size={14} />
                                             </button>
                                         ))}
                                     </div>
                                     <div className="w-2/3 bg-gray-50 rounded-2xl p-6 overflow-y-auto">
-                                        <h4 className="font-black uppercase text-sm text-gray-800 mb-4 flex items-center gap-2">
-                                            <Icon name="Users" size={16} className="text-purple-500" />
-                                            Voluntários Disponíveis - {scaleModalDept}
-                                        </h4>
+                                        <h4 className="font-black uppercase text-sm text-gray-800 mb-4 flex items-center gap-2"><Icon name="Users" size={16} className="text-purple-500" /> Voluntários Disponíveis - {scaleModalDept}</h4>
                                         <div className="space-y-2">
                                             {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).map(att => {
                                                 const deptObj = departments.find(d => d.name === att.servingDept);
@@ -1436,29 +1204,16 @@
                                                 return (
                                                     <div key={att.id} className="flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                                                         <div className="flex items-center justify-between p-3">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-black text-xs">{att.userName.charAt(0)}</div>
-                                                                <span className="font-bold text-xs uppercase text-gray-700">{att.userName}</span>
-                                                            </div>
-                                                            {att.isEscalated ? (
-                                                                <button onClick={() => toggleEscalation(att)} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-green-500 text-white shadow-md shadow-green-200">Escalado {att.role ? `(${att.role})` : ''}</button>
-                                                            ) : (
-                                                                <button onClick={() => { if (hasFunctions) { setExpandedVolunteer(expandedVolunteer === att.id ? null : att.id); } else { toggleEscalation(att, 'Voluntário'); } }} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-gray-100 text-gray-400 hover:bg-gray-200">Escalar</button>
-                                                            )}
+                                                            <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-black text-xs">{att.userName.charAt(0)}</div><span className="font-bold text-xs uppercase text-gray-700">{att.userName}</span></div>
+                                                            {att.isEscalated ? (<button onClick={() => toggleEscalation(att)} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-green-500 text-white shadow-md shadow-green-200">Escalado {att.role ? `(${att.role})` : ''}</button>) : (<button onClick={() => { if (hasFunctions) { setExpandedVolunteer(expandedVolunteer === att.id ? null : att.id); } else { toggleEscalation(att, 'Voluntário'); } }} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-gray-100 text-gray-400 hover:bg-gray-200">Escalar</button>)}
                                                         </div>
                                                         {!att.isEscalated && expandedVolunteer === att.id && hasFunctions && (
-                                                            <div className="bg-gray-50 p-2 grid grid-cols-2 gap-2 animate-in border-t border-gray-100">
-                                                                {deptObj.functions.map(role => (
-                                                                    <button key={role} onClick={() => { toggleEscalation(att, role); setExpandedVolunteer(null); }} className="p-2 bg-white border rounded text-[10px] font-bold hover:border-purple-500 hover:text-purple-600 transition">{role}</button>
-                                                                ))}
-                                                            </div>
+                                                            <div className="bg-gray-50 p-2 grid grid-cols-2 gap-2 animate-in border-t border-gray-100">{deptObj.functions.map(role => (<button key={role} onClick={() => { toggleEscalation(att, role); setExpandedVolunteer(null); }} className="p-2 bg-white border rounded text-[10px] font-bold hover:border-purple-500 hover:text-purple-600 transition">{role}</button>))}</div>
                                                         )}
                                                     </div>
                                                 );
                                             })}
-                                            {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).length === 0 && (
-                                                <p className="text-center py-10 text-gray-400 text-xs font-bold uppercase">Nenhum voluntário disponível nesta função.</p>
-                                            )}
+                                            {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).length === 0 && (<p className="text-center py-10 text-gray-400 text-xs font-bold uppercase">Nenhum voluntário disponível nesta função.</p>)}
                                         </div>
                                     </div>
                                 </div>
@@ -1551,7 +1306,7 @@
         function AdminTeamView({ users, departments, showToast }) {
             const [editingUser, setEditingUser] = useState(null);
             const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-            const [userForm, setUserForm] = useState({ name: '', password: '', unitType: '', unitName: '', departments: [] });
+            const [userForm, setUserForm] = useState({ name: '', password: '', unitType: '', unitName: '', departments: [], imageUrl: '' });
             const [userToDelete, setUserToDelete] = useState(null);
             const [searchTerm, setSearchTerm] = useState("");
 
@@ -1559,8 +1314,6 @@
                 e.preventDefault();
                 try {
                     const uid = editingUser ? editingUser.uid : userForm.name.trim().toLowerCase().replace(/\s+/g, '_');
-                    
-                    // CORRECTION: Preserve existing role if editing, otherwise default to 'user'
                     const currentRole = editingUser ? editingUser.role : 'user';
 
                     const userData = { 
@@ -1572,20 +1325,31 @@
                         participatingDepts: userForm.departments, 
                         role: currentRole, 
                         status: 'active', 
+                        imageUrl: userForm.imageUrl || '',
                         updatedAt: new Date().toISOString() 
                     };
                     if (!editingUser) userData.createdAt = new Date().toISOString();
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uid), userData, { merge: true });
-                    setIsUserModalOpen(false); setEditingUser(null); setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [] });
+                    setIsUserModalOpen(false); setEditingUser(null); setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [], imageUrl: '' });
                     showToast(editingUser ? "Membro atualizado!" : "Membro adicionado!");
                 } catch (err) { console.error(err); showToast("Erro ao salvar membro."); }
             };
 
-            const openEditUser = (u) => { setEditingUser(u); setUserForm({ name: u.name, password: u.password || '', unitType: u.unitType || '', unitName: u.unitName || '', departments: u.participatingDepts || [] }); setIsUserModalOpen(true); };
-            const openNewUser = () => { setEditingUser(null); setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [] }); setIsUserModalOpen(true); };
+            const openEditUser = (u) => { setEditingUser(u); setUserForm({ name: u.name, password: u.password || '', unitType: u.unitType || '', unitName: u.unitName || '', departments: u.participatingDepts || [], imageUrl: u.imageUrl || '' }); setIsUserModalOpen(true); };
+            const openNewUser = () => { setEditingUser(null); setUserForm({ name: '', password: '', unitType: '', unitName: '', departments: [], imageUrl: '' }); setIsUserModalOpen(true); };
             const toggleDeptInForm = (deptId) => setUserForm(prev => ({ ...prev, departments: prev.departments.includes(deptId) ? prev.departments.filter(d => d !== deptId) : [...prev.departments, deptId] }));
             const confirmDelete = async () => { if(userToDelete) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userToDelete)); showToast("Membro excluído."); setUserToDelete(null); } };
             const toggleUserStatus = async (user) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), { status: user.status === 'active' ? 'blocked' : 'active' }); showToast("Status alterado."); };
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.size > 2000000) { showToast("A imagem deve ter menos de 2MB."); return; }
+                    const reader = new FileReader();
+                    reader.onloadend = () => { setUserForm(prev => ({ ...prev, imageUrl: reader.result })); };
+                    reader.readAsDataURL(file);
+                }
+            };
 
             const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -1595,7 +1359,7 @@
                     
                     <div className="space-y-4">
                         <button onClick={openNewUser} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-purple-100 hover:bg-purple-700 transition flex items-center justify-center gap-2"><Icon name="Plus" size={16} /> Adicionar Novo Membro</button>
-                           
+                            
                         {/* Search Bar */}
                         <div className="relative">
                             <Icon name="Search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1612,7 +1376,9 @@
                                 {filteredUsers.map(u => (
                                     <div key={u.uid} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
                                         <div className="flex items-center gap-4">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black uppercase ${u.status === 'blocked' ? 'bg-red-400' : u.role === 'admin' || u.role === 'master' ? 'bg-purple-600' : 'bg-green-400'}`}>{u.name.charAt(0)}</div>
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black uppercase overflow-hidden ${u.status === 'blocked' ? 'bg-red-400' : u.role === 'admin' || u.role === 'master' ? 'bg-purple-600' : 'bg-green-400'}`}>
+                                                {u.imageUrl ? <img src={u.imageUrl} className="w-full h-full object-cover" /> : u.name.charAt(0)}
+                                            </div>
                                             <div>
                                                 <p className="font-bold text-sm text-gray-800 uppercase">{u.name}</p>
                                                 <p className="text-[10px] text-gray-400 font-bold uppercase">{u.role === 'master' ? 'Master Admin' : u.role === 'admin' ? 'Administrador' : 'Voluntário'} • Senha: {u.password}</p>
@@ -1639,6 +1405,7 @@
                                 <form onSubmit={handleSaveUser} className="space-y-4">
                                     <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Nome Completo</label><input value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} required className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
                                     <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Senha de Acesso</label><input value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} required className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div>
+                                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Foto de Perfil (Upload)</label><input type="file" accept="image/*" onChange={handleImageUpload} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-xs outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" />{userForm.imageUrl && <p className="text-[9px] text-green-500 font-bold mt-1 uppercase">Foto carregada</p>}</div>
                                     <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Tipo Unidade</label><select value={userForm.unitType} onChange={e => setUserForm({...userForm, unitType: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800"><option value="">Selecione...</option><option value="Regional">Regional</option><option value="Setor">Setor</option><option value="Congregação">Congregação</option></select></div><div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400">Nome Unidade</label><input value={userForm.unitName} onChange={e => setUserForm({...userForm, unitName: e.target.value})} placeholder="Ex: Sede" className="w-full p-3 bg-gray-50 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-200 text-gray-800" /></div></div>
                                     <div className="space-y-2 pt-2"><label className="text-[10px] font-black uppercase text-gray-400">Departamentos</label><div className="grid grid-cols-2 gap-2">{departments.map(d => (<button key={d.id} type="button" onClick={() => toggleDeptInForm(d.id)} className={`p-2 rounded-xl border-2 text-[10px] font-black uppercase transition-all ${userForm.departments.includes(d.id) ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-100 text-gray-400 hover:border-gray-200'}`}>{d.name}</button>))}</div></div>
                                     <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsUserModalOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Cancelar</button><button type="submit" className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-purple-700 shadow-lg shadow-purple-200">Salvar</button></div>
@@ -1773,15 +1540,38 @@
 
             useEffect(() => { if (!firebaseUser || !userData) return; const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); setUserData({ uid: docSnap.id, ...data }); } }); const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => { if (snap.empty) { ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' })); } else { setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() }))); } }); let unsubAllUsers = () => {}; if (userData.role === 'admin' || userData.role === 'master') { unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })))); } return () => { unsubProfile(); unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); }; }, [firebaseUser, userData?.uid, userData?.role]);
 
-            const handleLogin = async (e) => { e.preventDefault(); setLoginError(null); setAuthLoading(true); const username = e.target.username.value; const password = e.target.password.value; try { if (!firebaseUser) await signInAnonymously(auth); const userId = username.trim().toLowerCase().replace(/\s+/g, '_'); const userSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId)); if (userSnap.exists() && userSnap.data().password === password) { setUserData({ uid: userSnap.id, ...userSnap.data() }); } else { setLoginError("Credenciais inválidas."); } } catch (err) { setLoginError("Erro na conexão."); } finally { setAuthLoading(false); } };
-            const handleLogout = () => setUserData(null);
+            const handleLogin = async (e) => { 
+                e.preventDefault(); 
+                setLoginError(null); 
+                setAuthLoading(true); 
+                const username = e.target.username.value; 
+                const password = e.target.password.value; 
+                try { 
+                    if (!firebaseUser) await signInAnonymously(auth); 
+                    const userId = username.trim().toLowerCase().replace(/\s+/g, '_'); 
+                    const userSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId)); 
+                    if (userSnap.exists() && userSnap.data().password === password) { 
+                        const userData = userSnap.data();
+                        setUserData({ uid: userSnap.id, ...userData });
+                        // Redirect Logic for Leader
+                        if (userData.specialRole === 'leader' || userData.name === "Lider" || userData.name === "Liderança") {
+                            setView('manage_scales');
+                        } else {
+                            setView('dashboard');
+                        }
+                    } else { 
+                        setLoginError("Credenciais inválidas."); 
+                    } 
+                } catch (err) { setLoginError("Erro na conexão."); } finally { setAuthLoading(false); } 
+            };
+            const handleLogout = () => { setUserData(null); setView('dashboard'); };
             const showToast = (msg) => setToastMsg(msg);
 
             if (!userData) return <AuthScreen onLogin={handleLogin} error={loginError} isProcessing={authLoading} settings={appSettings} />;
             if (userData.status === 'blocked') return <BlockedScreen onLogout={handleLogout} />;
 
             const isAdmin = userData.role === 'admin' || userData.role === 'master';
-            const isLeader = userData.name === "Lider" || userData.name === "Liderança";
+            const isLeader = userData.specialRole === 'leader' || userData.name === "Lider" || userData.name === "Liderança";
 
             return (
                 <div className="flex min-h-screen bg-gray-50 text-gray-800 font-sans selection:bg-primary/20">
@@ -1789,10 +1579,15 @@
                     <aside className="hidden md:flex flex-col w-72 bg-white border-r p-6 fixed h-full z-20 no-print overflow-y-auto">
                         <div className="flex items-center gap-3 mb-12 px-2"><div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200 overflow-hidden">{appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={20} />}</div><h1 className="font-black uppercase text-xs tracking-tight leading-none text-gray-800 break-words max-w-[150px]">{appSettings.loginTitle}</h1></div>
                         <nav className="flex-1 space-y-2">
-                            <NavItem active={view === 'dashboard'} iconName="LayoutDashboard" label={appSettings.tabNames.dashboard} onClick={() => setView('dashboard')} open={true} />
-                            <NavItem active={view === 'agenda'} iconName="Calendar" label={appSettings.tabNames.agenda} onClick={() => setView('agenda')} open={true} />
-                            <NavItem active={view === 'congressos'} iconName="Trophy" label={appSettings.tabNames.congressos} onClick={() => setView('congressos')} open={true} />
+                            {!isLeader && (
+                                <>
+                                    <NavItem active={view === 'dashboard'} iconName="LayoutDashboard" label={appSettings.tabNames.dashboard} onClick={() => setView('dashboard')} open={true} />
+                                    <NavItem active={view === 'agenda'} iconName="Calendar" label={appSettings.tabNames.agenda} onClick={() => setView('agenda')} open={true} />
+                                    <NavItem active={view === 'congressos'} iconName="Trophy" label={appSettings.tabNames.congressos} onClick={() => setView('congressos')} open={true} />
+                                </>
+                            )}
                             <NavItem active={view === 'depts'} iconName="Briefcase" label={appSettings.tabNames.departments} onClick={() => setView('depts')} open={true} />
+                            
                             {isAdmin && (<><div className="my-6 border-t border-gray-100"></div><p className="px-4 text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
                             
                             {!isLeader && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => setView('create_events')} open={true} />}
@@ -1811,7 +1606,7 @@
                             )}
                             </>)}
                         </nav>
-                        <div className="mt-8 pt-6 border-t border-gray-100 flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-black text-gray-500 uppercase">{userData.name.charAt(0)}</div><div className="flex-1 overflow-hidden"><p className="font-bold text-xs truncate text-gray-800">{userData.name}</p><button onClick={handleLogout} className="text-[10px] text-red-400 font-bold uppercase hover:text-red-600">Sair</button></div></div>
+                        <div className="mt-8 pt-6 border-t border-gray-100 flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-black text-gray-500 uppercase overflow-hidden">{userData.imageUrl ? <img src={userData.imageUrl} className="w-full h-full object-cover" /> : userData.name.charAt(0)}</div><div className="flex-1 overflow-hidden"><p className="font-bold text-xs truncate text-gray-800">{userData.name}</p><button onClick={handleLogout} className="text-[10px] text-red-400 font-bold uppercase hover:text-red-600">Sair</button></div></div>
                     </aside>
                     {isAdmin && (<div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-50"><div className="flex items-center gap-2"><div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white overflow-hidden">{appSettings.logoUrl ? <img src={appSettings.logoUrl} className="w-full h-full object-cover"/> : <Icon name="Activity" size={16} />}</div><h1 className="font-black uppercase text-xs text-gray-800">{appSettings.loginTitle}</h1></div><button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-gray-50 rounded-xl text-gray-500"><Icon name="Menu" size={24} /></button></div>)}
                     {isAdmin && isMobileMenuOpen && (<div className="fixed inset-0 z-[60] flex md:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div><div className="relative w-64 bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in"><div className="flex justify-between items-center mb-8"><h2 className="font-black uppercase text-lg text-gray-800">Menu Admin</h2><button onClick={() => setIsMobileMenuOpen(false)}><Icon name="X" size={24} /></button></div><div className="space-y-2"><p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
@@ -1829,16 +1624,23 @@
                         )}
                         </div></div></div>)}
                     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-2 pb-safe flex justify-around items-center z-50 no-print shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                             <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}><Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /><span className="text-[9px] font-bold">Painel</span></button>
-                             <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} /><span className="text-[9px] font-bold">Agenda</span></button>
-                             <button onClick={() => setView('congressos')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'congressos' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Trophy" size={20} strokeWidth={view === 'congressos' ? 2.5 : 2} /><span className="text-[9px] font-bold">Congressos</span></button>
+                             {!isLeader && (
+                                 <>
+                                     <button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}><Icon name="LayoutDashboard" size={20} strokeWidth={view === 'dashboard' ? 2.5 : 2} /><span className="text-[9px] font-bold">Painel</span></button>
+                                     <button onClick={() => setView('agenda')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'agenda' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Calendar" size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} /><span className="text-[9px] font-bold">Agenda</span></button>
+                                     <button onClick={() => setView('congressos')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'congressos' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Trophy" size={20} strokeWidth={view === 'congressos' ? 2.5 : 2} /><span className="text-[9px] font-bold">Congressos</span></button>
+                                 </>
+                             )}
+                             {isLeader && (
+                                 <button onClick={() => setView('manage_scales')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'manage_scales' ? 'text-primary' : 'text-gray-400'}`}><Icon name="ListChecks" size={20} strokeWidth={view === 'manage_scales' ? 2.5 : 2} /><span className="text-[9px] font-bold">Escalas</span></button>
+                             )}
                              <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>
                              <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400"><Icon name="LogOut" size={20} /><span className="text-[9px] font-bold">Sair</span></button>
                     </div>
                     <main className={`flex-1 md:ml-72 p-4 md:p-12 mb-24 md:mb-0 max-w-7xl mx-auto w-full ${isAdmin ? 'mt-16 md:mt-0' : ''}`}>
-                        {view === 'dashboard' && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}
-                        {view === 'agenda' && <AgendaView title={appSettings.tabNames.agenda} category="Agenda Ministerial" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
-                        {view === 'congressos' && <AgendaView title={appSettings.tabNames.congressos} category="Congressos" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
+                        {view === 'dashboard' && !isLeader && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}
+                        {view === 'agenda' && !isLeader && <AgendaView title={appSettings.tabNames.agenda} category="Agenda Ministerial" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
+                        {view === 'congressos' && !isLeader && <AgendaView title={appSettings.tabNames.congressos} category="Congressos" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
                         {view === 'view_scale' && isAdmin && !isLeader && <ViewScaleView events={events} attendance={attendance} departments={departments} />}
                         {view === 'depts' && <UserDepartments title={appSettings.tabNames.departments} departments={departments} userProfile={userData} />}
                         {isAdmin && view === 'create_events' && !isLeader && <AdminCreateEventsView events={events} showToast={showToast} />}

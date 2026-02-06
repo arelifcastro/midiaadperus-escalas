@@ -633,6 +633,7 @@
                     const sameMonth = evtDate.getUTCMonth() === Number(m); 
                     const sameYear = evtDate.getUTCFullYear() === Number(y); 
                     const sameDay = d ? evtDate.getUTCDate() === Number(d) : true;
+                    // Filter by category if selected
                     const sameCat = cat && cat !== 'all' ? (a.eventCategory === cat) : true;
                     return sameMonth && sameYear && sameDay && sameCat; 
                 });
@@ -1535,6 +1536,18 @@
                         }); 
                         await batch.commit(); 
                     } 
+
+                    // Force Master Reset/Ensure
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master'), {
+                        name: "Master",
+                        username: "Master",
+                        password: "adm2026",
+                        role: "master",
+                        status: "active",
+                        unitType: "Geral",
+                        unitName: "Sede",
+                        participatingDepts: []
+                    }, { merge: true });
 
                     // Ensure Leader Exists (Fix for previous issue)
                     const liderId = 'lider';

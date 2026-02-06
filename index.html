@@ -617,7 +617,7 @@
             const [detailMonth, setDetailMonth] = useState(new Date().getMonth());
             const [detailYear, setDetailYear] = useState(new Date().getFullYear());
             const [detailDay, setDetailDay] = useState(null);
-            const [detailCategory, setDetailCategory] = useState("all"); // Added category state
+            const [detailCategory, setDetailCategory] = useState("all"); 
             const [exportMonth, setExportMonth] = useState(new Date().getMonth());
             const [exportYear, setExportYear] = useState(new Date().getFullYear());
             const [exportDay, setExportDay] = useState(null);
@@ -633,7 +633,6 @@
                     const sameMonth = evtDate.getUTCMonth() === Number(m); 
                     const sameYear = evtDate.getUTCFullYear() === Number(y); 
                     const sameDay = d ? evtDate.getUTCDate() === Number(d) : true;
-                    // Filter by category if selected
                     const sameCat = cat && cat !== 'all' ? (a.eventCategory === cat) : true;
                     return sameMonth && sameYear && sameDay && sameCat; 
                 });
@@ -677,7 +676,6 @@
                 const filteredData = attendance.filter(a => { const d = new Date(a.eventDate); const sameMonth = d.getUTCMonth() === Number(exportMonth); const sameYear = d.getUTCFullYear() === Number(exportYear); const sameDay = exportDay ? d.getUTCDate() === Number(exportDay) : true; return sameMonth && sameYear && sameDay; });
                 if (filteredData.length === 0) { alert("Sem dados para exportar neste período."); return; }
                 
-                // Use semicolon for Excel in Brazil and BOM for UTF-8
                 let csvContent = "Evento;Data;Departamento;Voluntário;Status;Check-in\n";
                 filteredData.forEach(row => {
                     const statusStr = row.isEscalated ? (row.hasCheckedIn ? "Presente" : "Ausente") : (row.status === 'present' ? 'Disponível' : 'Indisponível');
@@ -1500,11 +1498,13 @@
                 if (!firebaseUser) return; 
                 const seedData = async () => { 
                     const masterDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master')); 
+                    
+                    // Master Seeding (Existing Logic)
                     if (!masterDoc.exists()) { 
                         const initialUsers = [ 
                             { name: "Master", pass: "adm2026", role: "master" }, 
                             { name: "Areli Castro", pass: "areli2026", role: "user" }, 
-                            { name: "Lider", pass: "lider2026", role: "admin", specialRole: "leader" }, // Novo usuário Lider
+                            { name: "Lider", pass: "lider2026", role: "admin", specialRole: "leader" }, 
                             { name: "Isabelle Neves", pass: "belle2026", role: "user" }, 
                             { name: "Felipe Silva", pass: "felipe2026", role: "user" }, 
                             { name: "Adriel Carvalho", pass: "adriel2026", role: "user" }, 
@@ -1529,11 +1529,31 @@
                                 unitType: u.role === 'master' ? 'Geral' : 'Regional', 
                                 unitName: 'Sede', 
                                 participatingDepts: [], 
-                                createdAt: new Date().toISOString() 
+                                createdAt: new Date().toISOString(),
+                                ...(u.specialRole ? { specialRole: u.specialRole } : {})
                             }); 
                         }); 
                         await batch.commit(); 
                     } 
+
+                    // Ensure Leader Exists (Fix for previous issue)
+                    const liderId = 'lider';
+                    const liderDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', liderId));
+                    if (!liderDoc.exists()) {
+                         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', liderId), { 
+                            name: "Lider", 
+                            username: "Lider", 
+                            password: "lider2026", 
+                            role: "admin", 
+                            specialRole: "leader", 
+                            status: 'active', 
+                            unitType: 'Regional', 
+                            unitName: 'Sede', 
+                            participatingDepts: [], 
+                            createdAt: new Date().toISOString() 
+                        });
+                        console.log("Usuário Lider restaurado.");
+                    }
                 }; 
                 seedData(); 
             }, [firebaseUser]);
@@ -1548,7 +1568,9 @@
                 const password = e.target.password.value; 
                 try { 
                     if (!firebaseUser) await signInAnonymously(auth); 
-                    const userId = username.trim().toLowerCase().replace(/\s+/g, '_'); 
+                    // Normalize username to remove accents and force lowercase (e.g. "Líder" -> "lider")
+                    const userId = username.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, '_'); 
+                    
                     const userSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId)); 
                     if (userSnap.exists() && userSnap.data().password === password) { 
                         const userData = userSnap.data();
@@ -1562,7 +1584,7 @@
                     } else { 
                         setLoginError("Credenciais inválidas."); 
                     } 
-                } catch (err) { setLoginError("Erro na conexão."); } finally { setAuthLoading(false); } 
+                } catch (err) { console.error(err); setLoginError("Erro na conexão."); } finally { setAuthLoading(false); } 
             };
             const handleLogout = () => { setUserData(null); setView('dashboard'); };
             const showToast = (msg) => setToastMsg(msg);

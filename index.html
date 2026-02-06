@@ -1,3 +1,5 @@
+NOVO
+
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -1548,7 +1550,7 @@
                 const password = e.target.password.value; 
                 try { 
                     if (!firebaseUser) await signInAnonymously(auth); 
-                    const userId = username.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, '_'); 
+                    const userId = username.trim().toLowerCase().replace(/\s+/g, '_'); 
                     const userSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId)); 
                     if (userSnap.exists() && userSnap.data().password === password) { 
                         const userData = userSnap.data();

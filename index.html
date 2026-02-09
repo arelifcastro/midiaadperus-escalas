@@ -154,26 +154,6 @@
             </div>
         );
 
-        const ProgressBar = ({ value, max, type = 'performance' }) => {
-            const percentage = Math.min(100, Math.max(0, (value / max) * 100));
-            let colorClass = 'bg-gray-200';
-            if (type === 'burden') {
-                if (value <= 2) colorClass = 'bg-green-500';
-                else if (value <= 5) colorClass = 'bg-yellow-500';
-                else colorClass = 'bg-red-500';
-            } else if (type === 'performance') {
-                const ratio = value / (max || 1);
-                if (ratio < 0.3) colorClass = 'bg-red-500';
-                else if (ratio < 0.7) colorClass = 'bg-yellow-500';
-                else colorClass = 'bg-emerald-500';
-            }
-            return (
-                <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
-                    <div className={`h-full rounded-full ${colorClass} animate-bar shadow-sm`} style={{ width: `${percentage}%` }}></div>
-                </div>
-            );
-        };
-
         const getPeriodStyle = (period) => {
             switch(period) {
                 case 'Manhã': return { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: 'Sun' };
@@ -206,6 +186,38 @@
             );
         }
 
+        // --- Progress Bar Component ---
+        const ProgressBar = ({ value, max, type = 'performance' }) => {
+            const percentage = Math.min(100, Math.max(0, (value / max) * 100));
+            
+            let colorClass = 'bg-gray-200';
+            
+            if (type === 'burden') {
+                if (value <= 2) colorClass = 'bg-green-500';
+                else if (value <= 5) colorClass = 'bg-yellow-500';
+                else colorClass = 'bg-red-500';
+            } else if (type === 'performance') {
+                const ratio = value / (max || 1);
+                if (ratio < 0.3) colorClass = 'bg-red-500';
+                else if (ratio < 0.7) colorClass = 'bg-yellow-500';
+                else colorClass = 'bg-emerald-500';
+            } else if (type === 'availability') {
+                 const ratio = value / (max || 1);
+                 if (ratio < 0.3) colorClass = 'bg-cyan-200 text-cyan-800';
+                 else if (ratio < 0.7) colorClass = 'bg-cyan-400 text-white';
+                 else colorClass = 'bg-cyan-600 text-white';
+            }
+
+            return (
+                <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                    <div 
+                        className={`h-full rounded-full ${colorClass} animate-bar shadow-sm`} 
+                        style={{ width: `${percentage}%` }}
+                    ></div>
+                </div>
+            );
+        };
+
         function StatCard({ title, value, iconName, iconColor }) {
             return (
                 <div className="bg-white p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border shadow-sm flex items-center gap-4 hover:translate-y-[-2px] transition-transform group card-print">
@@ -219,6 +231,8 @@
                 </div>
             );
         }
+
+        // --- Screens ---
 
         function BlockedScreen({ onLogout }) {
             return (
@@ -492,7 +506,7 @@
             );
         }
 
-        function ViewScaleView({ events, attendance, departments }) {
+        function ViewScaleView({ events, attendance, departments, showDrafts }) {
             const [filterCategory, setFilterCategory] = useState('Agenda Ministerial');
             const [filterDay, setFilterDay] = useState('');
             const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
@@ -506,14 +520,14 @@
                 const monthMatch = d.getMonth() === Number(filterMonth);
                 const dayMatch = filterDay ? d.getDate() === Number(filterDay) : true;
                 const periodMatch = filterPeriod ? ev.period === filterPeriod : true;
-                const isPublished = ev.scaleStatus === 'ready';
+                const isPublished = showDrafts ? true : ev.scaleStatus === 'ready';
                 return catMatch && yearMatch && monthMatch && dayMatch && periodMatch && isPublished;
-            }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, filterCategory, filterDay, filterMonth, filterYear, filterPeriod]);
+            }).sort((a,b) => new Date(a.date) - new Date(b.date)), [events, filterCategory, filterDay, filterMonth, filterYear, filterPeriod, showDrafts]);
 
             return (
                 <div className="space-y-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                        <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Ver Escala Publicada</h1>
+                        <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">{showDrafts ? 'Ver Escala (Rascunho & Oficial)' : 'Ver Escala Publicada'}</h1>
                         <div className="flex flex-col md:flex-row gap-4 items-end w-full md:w-auto no-print">
                             <button onClick={() => window.print()} className="bg-gray-800 text-white px-4 py-2 rounded-xl font-bold uppercase text-[10px] flex items-center gap-2 hover:bg-gray-700 transition shadow-lg shadow-gray-200"><Icon name="Printer" size={16} /> Imprimir / Salvar PDF</button>
                             <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border shadow-sm">
@@ -535,7 +549,8 @@
                                 if (vols.length > 0) byDept[d.name] = { color: d.color, vols };
                             });
                             return (
-                                <div key={ev.id} className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden card-print">
+                                <div key={ev.id} className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden card-print relative">
+                                    {showDrafts && ev.scaleStatus !== 'ready' && <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[8px] font-black uppercase px-2 py-1 rounded-bl-xl z-10">Rascunho</div>}
                                     <div className="bg-gray-50 p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
                                         <div>
                                             <h2 className="text-xl font-black uppercase text-gray-800">{ev.name}</h2>
@@ -624,6 +639,7 @@
                     const sameMonth = evtDate.getUTCMonth() === Number(m); 
                     const sameYear = evtDate.getUTCFullYear() === Number(y); 
                     const sameDay = d ? evtDate.getUTCDate() === Number(d) : true;
+                    // Filter by category if selected
                     const sameCat = cat && cat !== 'all' ? (a.eventCategory === cat) : true;
                     return sameMonth && sameYear && sameDay && sameCat; 
                 });
@@ -634,6 +650,12 @@
                 const lates = userAtt.filter(a => a.attendanceStatus === 'late').length;
                 const absents = userAtt.filter(a => { if (!a.isEscalated) return false; const passed = new Date() > new Date(a.eventDate + 'T23:59:59'); if (!a.hasCheckedIn && passed) return true; if (a.attendanceStatus === 'absent') return true; return false; }).length;
                 
+                // Count availability by department (Preference)
+                const availDepts = {};
+                userAtt.filter(a => a.status === 'present').forEach(a => {
+                    availDepts[a.servingDept] = (availDepts[a.servingDept] || 0) + 1;
+                });
+
                 const deptCounts = {};
                 const functionCounts = {};
                 userAtt.filter(a => a.isEscalated).forEach(a => {
@@ -641,11 +663,19 @@
                     if(a.role) { if(!functionCounts[a.servingDept]) functionCounts[a.servingDept] = {}; functionCounts[a.servingDept][a.role] = (functionCounts[a.servingDept][a.role] || 0) + 1; }
                 });
                 const sortedDepts = Object.entries(deptCounts).sort((a,b) => b[1] - a[1]);
-                return { avail, unavail, escalated, lates, absents, topDepts: sortedDepts, functions: functionCounts };
+                return { avail, unavail, escalated, lates, absents, topDepts: sortedDepts, functions: functionCounts, availDepts };
             };
 
-            const getDeptStats = (deptName, deptId, m, y, d) => {
-                const deptAtts = attendance.filter(a => { const evtDate = new Date(a.eventDate); return a.servingDept === deptName && evtDate.getUTCMonth() === Number(m) && evtDate.getUTCFullYear() === Number(y) && (d ? evtDate.getUTCDate() === Number(d) : true); });
+            const getDeptStats = (deptName, deptId, m, y, d, cat) => {
+                const deptAtts = attendance.filter(a => { 
+                    const evtDate = new Date(a.eventDate); 
+                    const sameCat = cat && cat !== 'all' ? (a.eventCategory === cat) : true;
+                    return a.servingDept === deptName && 
+                           evtDate.getUTCMonth() === Number(m) && 
+                           evtDate.getUTCFullYear() === Number(y) &&
+                           (d ? evtDate.getUTCDate() === Number(d) : true) &&
+                           sameCat;
+                });
                 const avail = deptAtts.filter(a => a.status === 'present').length;
                 const unavail = deptAtts.filter(a => a.status === 'absent').length;
                 const escalated = deptAtts.filter(a => a.isEscalated).length;
@@ -661,7 +691,7 @@
             };
 
             const volStats = selectedVolunteer ? getVolunteerStats(selectedVolunteer.uid, detailMonth, detailYear, detailDay, detailCategory) : null;
-            const deptStats = selectedDeptReport ? getDeptStats(selectedDeptReport.name, selectedDeptReport.id, detailMonth, detailYear, detailDay) : null;
+            const deptStats = selectedDeptReport ? getDeptStats(selectedDeptReport.name, selectedDeptReport.id, detailMonth, detailYear, detailDay, detailCategory) : null;
 
             const handleExport = () => {
                 const filteredData = attendance.filter(a => { const d = new Date(a.eventDate); const sameMonth = d.getUTCMonth() === Number(exportMonth); const sameYear = d.getUTCFullYear() === Number(exportYear); const sameDay = exportDay ? d.getUTCDate() === Number(exportDay) : true; return sameMonth && sameYear && sameDay; });
@@ -767,8 +797,24 @@
                                         <div className="flex justify-between mb-1"><span className="text-[10px] font-black uppercase text-gray-400">Nível de Carga</span><span className="text-[10px] font-bold text-gray-800">{volStats.escalated} Escalas</span></div>
                                         <ProgressBar value={volStats.escalated} max={8} type="burden" />
                                     </div>
+                                    
+                                    {/* New Section: Availability Preference */}
+                                    <div className="mb-8 text-left">
+                                        <h4 className="font-black uppercase text-xs text-gray-800 border-b pb-2 mb-2">Preferência de Disponibilidade</h4>
+                                        {Object.entries(volStats.availDepts).map(([dept, count]) => (
+                                            <div key={dept} className="mb-2">
+                                                <div className="flex justify-between mb-1">
+                                                    <span className="text-[10px] font-bold text-gray-500 uppercase">{dept}</span>
+                                                    <span className="text-[10px] font-black text-cyan-600">{count}x</span>
+                                                </div>
+                                                <ProgressBar value={count} max={volStats.avail} type="availability" />
+                                            </div>
+                                        ))}
+                                        {Object.keys(volStats.availDepts).length === 0 && <p className="text-center text-xs text-gray-300 italic">Nenhuma disponibilidade registrada.</p>}
+                                    </div>
+
                                     <div className="text-left space-y-4">
-                                        <h4 className="font-black uppercase text-xs text-gray-800 border-b pb-2">Atuação por Departamento</h4>
+                                        <h4 className="font-black uppercase text-xs text-gray-800 border-b pb-2">Atuação por Departamento (Escalado)</h4>
                                         {volStats.topDepts.map(([dept, count]) => (
                                             <div key={dept} className="space-y-2">
                                                 <div className="flex justify-between items-center"><span className="text-xs font-bold text-gray-600 uppercase">{dept}</span><span className="text-[10px] font-black bg-gray-100 px-2 rounded text-gray-500">{count}x</span></div>
@@ -794,10 +840,13 @@
                                     <h3 className="font-black uppercase text-lg text-gray-800" style={{ color: selectedDeptReport.color }}>{selectedDeptReport.name}</h3>
                                     <button onClick={() => setSelectedDeptReport(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
                                 </div>
-                                <div className="flex gap-2 mb-6">
-                                    <select value={detailDay || ''} onChange={e => setDetailDay(e.target.value ? Number(e.target.value) : null)} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1"><option value="">Dia (Todos)</option>{[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
-                                    <select value={detailMonth} onChange={e => setDetailMonth(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
-                                    <select value={detailYear} onChange={e => setDetailYear(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                                <div className="flex flex-wrap gap-2 mb-6">
+                                    <select value={detailCategory} onChange={e => setDetailCategory(e.target.value)} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none w-full md:w-32"><option value="all">Todas Cats.</option><option value="Agenda Ministerial">Agenda</option><option value="Congressos">Congressos</option></select>
+                                    <div className="flex gap-2 w-full md:w-auto">
+                                        <select value={detailDay || ''} onChange={e => setDetailDay(e.target.value ? Number(e.target.value) : null)} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1"><option value="">Dia (Todos)</option>{[...Array(31)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}</select>
+                                        <select value={detailMonth} onChange={e => setDetailMonth(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                                        <select value={detailYear} onChange={e => setDetailYear(Number(e.target.value))} className="bg-gray-50 p-2 rounded-lg text-[10px] font-bold uppercase outline-none flex-1">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 mb-6">
                                     <div className="p-4 bg-green-50 rounded-2xl text-center border border-green-100"><span className="block text-2xl font-black text-green-600">{deptStats.avail}</span><span className="text-[9px] font-bold uppercase text-green-800">Disponibilidades</span></div>
@@ -1020,7 +1069,7 @@
             );
         }
 
-        function AdminScalesView({ events, attendance, users, departments, showToast, isLeader = false }) {
+        function AdminScalesView({ events, attendance, users, departments, showToast, isLeader = false, onNavigate }) {
             const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
             const [filterYear, setFilterYear] = useState(new Date().getFullYear());
             const [filterCategory, setFilterCategory] = useState('all');
@@ -1030,6 +1079,7 @@
             const [scaleModalEvent, setScaleModalEvent] = useState(null);
             const [scaleModalDept, setScaleModalDept] = useState(null);
             const [expandedVolunteer, setExpandedVolunteer] = useState(null);
+            const [showContext, setShowContext] = useState(false); // Mobile toggle for context
             
             const [checkinReportEvent, setCheckinReportEvent] = useState(null);
 
@@ -1092,18 +1142,19 @@
                 <div className="space-y-6">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4 no-print">
                         <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Gerenciar Escalas</h1>
+                        
                         <div className="flex gap-2 flex-wrap justify-end">
+                            <button onClick={() => onNavigate('view_scale_draft')} className="bg-purple-100 text-purple-700 px-4 py-2 rounded-xl border border-purple-200 text-xs font-bold uppercase outline-none cursor-pointer hover:bg-purple-200 transition flex items-center gap-2">
+                                <Icon name="FileSearch" size={14} /> Ver Escala Rascunho
+                            </button>
                             <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer"><option value="all">Todas as Categorias</option><option value="Agenda Ministerial">Agenda & Escalas</option><option value="Congressos">Congressos</option></select>
                             <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer">{MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
                             <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="bg-white p-2 rounded-xl border shadow-sm text-xs font-bold uppercase outline-none cursor-pointer">{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select>
                         </div>
                     </div>
-
                     <div className="space-y-4">
                         {filteredEvents.map(ev => {
                             const { present, absent, pendingUsers } = getEventLists(ev.id);
-                            
-                            // Date formatting for Admin Scale View
                             const dateObj = new Date(ev.date + 'T12:00:00');
                             const weekDay = dateObj.toLocaleDateString('pt-BR', { weekday: 'long' });
                             const weekDayCap = weekDay.charAt(0).toUpperCase() + weekDay.slice(1);
@@ -1136,7 +1187,6 @@
                         })}
                          {filteredEvents.length === 0 && <p className="text-center py-8 text-xs font-bold text-gray-300 uppercase">Nenhum evento encontrado com os filtros selecionados.</p>}
                     </div>
-
                     {statsModalEvent && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
@@ -1157,7 +1207,6 @@
                             </div>
                         </div>
                     )}
-
                     {checkinReportEvent && !isLeader && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
@@ -1180,38 +1229,114 @@
                     )}
                     {scaleModalEvent && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 modal-overlay">
-                            <div className="bg-white rounded-[2rem] w-full max-w-4xl p-8 shadow-2xl animate-in max-h-[90vh] overflow-hidden flex flex-col">
+                            <div className="bg-white rounded-[2rem] w-full max-w-6xl p-8 shadow-2xl animate-in max-h-[95vh] overflow-hidden flex flex-col">
                                 <div className="flex justify-between items-center mb-6 flex-shrink-0">
-                                    <div><h3 className="font-black uppercase text-lg text-gray-800">Montar Escala</h3><p className="text-[10px] font-bold text-gray-400 uppercase">{scaleModalEvent.name} • {new Date(scaleModalEvent.date).toLocaleDateString()}</p></div>
+                                    <div className="flex items-center gap-4">
+                                        <div><h3 className="font-black uppercase text-lg text-gray-800">Montar Escala</h3><p className="text-[10px] font-bold text-gray-400 uppercase">{scaleModalEvent.name} • {new Date(scaleModalEvent.date).toLocaleDateString()}</p></div>
+                                        <button onClick={() => setShowContext(!showContext)} className="lg:hidden px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-100"><Icon name={showContext ? "EyeOff" : "Eye"} size={14} className="inline mr-1"/> Ver Contexto</button>
+                                    </div>
                                     <button onClick={() => setScaleModalEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><Icon name="X" size={16} /></button>
                                 </div>
-                                <div className="flex flex-1 overflow-hidden gap-6">
-                                    <div className="w-1/3 overflow-y-auto space-y-2 pr-2">
+                                <div className="flex flex-col lg:flex-row flex-1 overflow-hidden gap-6">
+                                    {/* Column 1: Departments */}
+                                    <div className="w-full lg:w-1/4 overflow-y-auto space-y-2 pr-2 hidden lg:block">
                                         {departments.map(d => (
                                             <button key={d.id} onClick={() => setScaleModalDept(d.name)} className={`w-full text-left p-4 rounded-xl border-2 transition-all flex justify-between items-center ${scaleModalDept === d.name ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-100 text-gray-500 hover:border-gray-200'}`}>
                                                 <span className="font-black text-xs uppercase">{d.name}</span><Icon name="ChevronRight" size={14} />
                                             </button>
                                         ))}
                                     </div>
-                                    <div className="w-2/3 bg-gray-50 rounded-2xl p-6 overflow-y-auto">
-                                        <h4 className="font-black uppercase text-sm text-gray-800 mb-4 flex items-center gap-2"><Icon name="Users" size={16} className="text-purple-500" /> Voluntários Disponíveis - {scaleModalDept}</h4>
-                                        <div className="space-y-2">
-                                            {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).map(att => {
-                                                const deptObj = departments.find(d => d.name === att.servingDept);
-                                                const hasFunctions = deptObj?.functions && deptObj.functions.length > 0;
-                                                return (
-                                                    <div key={att.id} className="flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                                                        <div className="flex items-center justify-between p-3">
-                                                            <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-black text-xs">{att.userName.charAt(0)}</div><span className="font-bold text-xs uppercase text-gray-700">{att.userName}</span></div>
-                                                            {att.isEscalated ? (<button onClick={() => toggleEscalation(att)} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-green-500 text-white shadow-md shadow-green-200">Escalado {att.role ? `(${att.role})` : ''}</button>) : (<button onClick={() => { if (hasFunctions) { setExpandedVolunteer(expandedVolunteer === att.id ? null : att.id); } else { toggleEscalation(att, 'Voluntário'); } }} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-gray-100 text-gray-400 hover:bg-gray-200">Escalar</button>)}
+                                     {/* Mobile Dept Selector */}
+                                     <div className="lg:hidden w-full overflow-x-auto pb-2 flex gap-2 shrink-0">
+                                        {departments.map(d => (
+                                            <button key={d.id} onClick={() => setScaleModalDept(d.name)} className={`px-4 py-2 rounded-xl border-2 transition-all whitespace-nowrap text-[10px] font-black uppercase ${scaleModalDept === d.name ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-100 text-gray-500'}`}>{d.name}</button>
+                                        ))}
+                                    </div>
+
+                                    {/* Column 2: Available Volunteers */}
+                                    {!showContext && (
+                                        <div className="w-full lg:w-2/4 bg-gray-50 rounded-2xl p-6 overflow-y-auto flex-1">
+                                            <h4 className="font-black uppercase text-sm text-gray-800 mb-4 flex items-center gap-2"><Icon name="Users" size={16} className="text-purple-500" /> Voluntários Disponíveis - {scaleModalDept}</h4>
+                                            <div className="space-y-2">
+                                                {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).map(att => {
+                                                    const deptObj = departments.find(d => d.name === att.servingDept);
+                                                    const hasFunctions = deptObj?.functions && deptObj.functions.length > 0;
+                                                    const volUser = users.find(u => u.uid === att.userId);
+                                                    
+                                                    return (
+                                                        <div key={att.id} className="flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                                            <div className="flex items-center justify-between p-3">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-black text-xs overflow-hidden border border-purple-200">
+                                                                        {volUser?.imageUrl ? <img src={volUser.imageUrl} className="w-full h-full object-cover"/> : att.userName.charAt(0)}
+                                                                    </div>
+                                                                    <span className="font-bold text-xs uppercase text-gray-700">{att.userName}</span>
+                                                                </div>
+                                                                {att.isEscalated ? (<button onClick={() => toggleEscalation(att)} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-green-500 text-white shadow-md shadow-green-200">Escalado {att.role ? `(${att.role})` : ''}</button>) : (<button onClick={() => { if (hasFunctions) { setExpandedVolunteer(expandedVolunteer === att.id ? null : att.id); } else { toggleEscalation(att, 'Voluntário'); } }} className="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all bg-gray-100 text-gray-400 hover:bg-gray-200">Escalar</button>)}
+                                                            </div>
+                                                            {!att.isEscalated && expandedVolunteer === att.id && hasFunctions && (
+                                                                <div className="bg-gray-50 p-2 grid grid-cols-2 gap-2 animate-in border-t border-gray-100">{deptObj.functions.map(role => (<button key={role} onClick={() => { toggleEscalation(att, role); setExpandedVolunteer(null); }} className="p-2 bg-white border rounded text-[10px] font-bold hover:border-purple-500 hover:text-purple-600 transition">{role}</button>))}</div>
+                                                            )}
                                                         </div>
-                                                        {!att.isEscalated && expandedVolunteer === att.id && hasFunctions && (
-                                                            <div className="bg-gray-50 p-2 grid grid-cols-2 gap-2 animate-in border-t border-gray-100">{deptObj.functions.map(role => (<button key={role} onClick={() => { toggleEscalation(att, role); setExpandedVolunteer(null); }} className="p-2 bg-white border rounded text-[10px] font-bold hover:border-purple-500 hover:text-purple-600 transition">{role}</button>))}</div>
-                                                        )}
+                                                    );
+                                                })}
+                                                {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).length === 0 && (<p className="text-center py-10 text-gray-400 text-xs font-bold uppercase">Nenhum voluntário disponível nesta função.</p>)}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Column 3: Context (Other Events in Month) */}
+                                    <div className={`${showContext ? 'block w-full' : 'hidden lg:block lg:w-1/4'} border-l border-gray-100 pl-0 lg:pl-6 overflow-y-auto flex-1`}>
+                                        <h4 className="font-black uppercase text-xs text-gray-400 mb-4 sticky top-0 bg-white py-2 z-10 flex items-center justify-between">
+                                            <span>Contexto do Mês ({scaleModalDept})</span>
+                                            {showContext && <button onClick={() => setShowContext(false)} className="text-red-500 text-[10px]">Fechar</button>}
+                                        </h4>
+                                        <div className="space-y-6">
+                                            {events.filter(e => {
+                                                const d1 = new Date(e.date);
+                                                const d2 = new Date(scaleModalEvent.date);
+                                                // Same month/year, excluding current event
+                                                return e.id !== scaleModalEvent.id && d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
+                                            }).sort((a,b) => new Date(a.date) - new Date(b.date)).map(otherEvent => {
+                                                // Filter: escalated in THIS department in OTHER event
+                                                const escalatedInOther = attendance.filter(a => a.eventId === otherEvent.id && a.isEscalated && a.servingDept === scaleModalDept);
+                                                
+                                                return (
+                                                    <div key={otherEvent.id} className="mb-6 border-b border-gray-100 pb-4 last:border-0">
+                                                        <div className="mb-3">
+                                                            <p className="text-xs font-black text-gray-800 uppercase leading-tight mb-1">{otherEvent.name}</p>
+                                                            <div className="flex items-center gap-2 text-[9px] text-gray-500 font-bold uppercase">
+                                                                 <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{new Date(otherEvent.date).toLocaleDateString('pt-BR', { weekday: 'short' })}</span>
+                                                                 <span>{new Date(otherEvent.date).toLocaleDateString()}</span>
+                                                                 <span>•</span>
+                                                                 <span>{otherEvent.period}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            {escalatedInOther.map(esc => {
+                                                                const u = users.find(user => user.uid === esc.userId);
+                                                                return (
+                                                                    <div key={esc.id} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg">
+                                                                         <div className="w-6 h-6 rounded-full bg-gray-200 border border-white overflow-hidden shrink-0">
+                                                                              {u?.imageUrl ? <img src={u.imageUrl} className="w-full h-full object-cover"/> : <span className="w-full h-full flex items-center justify-center text-[8px] font-bold text-gray-500">{esc.userName.charAt(0)}</span>}
+                                                                         </div>
+                                                                         <div className="leading-none">
+                                                                             <p className="text-[10px] font-bold text-gray-700 uppercase">{esc.userName}</p>
+                                                                             {esc.role && <p className="text-[9px] text-purple-500 font-bold uppercase">{esc.role}</p>}
+                                                                         </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            {escalatedInOther.length === 0 && <p className="text-[9px] text-gray-300 italic pl-1">Ninguém de {scaleModalDept} escalado.</p>}
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
-                                            {attendance.filter(a => a.eventId === scaleModalEvent.id && a.status === 'present' && a.servingDept === scaleModalDept).length === 0 && (<p className="text-center py-10 text-gray-400 text-xs font-bold uppercase">Nenhum voluntário disponível nesta função.</p>)}
+                                            {events.filter(e => {
+                                                const d1 = new Date(e.date);
+                                                const d2 = new Date(scaleModalEvent.date);
+                                                return e.id !== scaleModalEvent.id && d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
+                                            }).length === 0 && <p className="text-center text-xs text-gray-300 italic">Sem outros eventos neste mês.</p>}
                                         </div>
                                     </div>
                                 </div>
@@ -1222,6 +1347,8 @@
             );
         }
 
+        // --- AdminDepartmentView & AdminTeamView & MasterSettings & App ---
+        
         function AdminDepartmentsView({ departments, showToast }) {
             const [editingDept, setEditingDept] = useState(null);
             const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1518,7 +1645,7 @@
                         ]; 
                         const batch = writeBatch(db); 
                         initialUsers.forEach(u => { 
-                            const id = u.name.trim().toLowerCase().replace(/\s+/g, '_'); 
+                            const id = u.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, '_'); 
                             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id); 
                             batch.set(docRef, { 
                                 name: u.name, 
@@ -1536,19 +1663,22 @@
                         await batch.commit(); 
                     } 
 
-                    // Force Master Reset/Ensure
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master'), {
-                        name: "Master",
-                        username: "Master",
-                        password: "adm2026",
-                        role: "master",
-                        status: "active",
-                        unitType: "Geral",
-                        unitName: "Sede",
-                        participatingDepts: []
+                    // FORCE MASTER RESET (CRITICAL FIX)
+                    // This ensures Master always exists with correct credentials
+                    const masterId = 'master';
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', masterId), { 
+                        name: "Master", 
+                        username: "Master", 
+                        password: "adm2026", 
+                        role: "master", 
+                        status: 'active', 
+                        unitType: 'Geral', 
+                        unitName: 'Sede', 
+                        participatingDepts: [], 
+                        createdAt: new Date().toISOString() 
                     }, { merge: true });
 
-                    // Ensure Leader Exists (Fix for previous issue)
+                    // FORCE LEADER CHECK (CRITICAL FIX)
                     const liderId = 'lider';
                     const liderDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', liderId));
                     if (!liderDoc.exists()) {
@@ -1628,9 +1758,10 @@
                             
                             <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => setView('manage_scales')} open={true} />
                             
+                            {(isLeader || !isLeader) && <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => setView('view_scale')} open={true} />}
+                            
                             {!isLeader && (
                                 <>
-                                    <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => setView('view_scale')} open={true} />
                                     <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => setView('manage_team')} open={true} />
                                     <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => setView('manage_depts')} open={true} />
                                     <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => setView('reports')} open={true} />
@@ -1646,9 +1777,9 @@
                     {isAdmin && isMobileMenuOpen && (<div className="fixed inset-0 z-[60] flex md:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div><div className="relative w-64 bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in"><div className="flex justify-between items-center mb-8"><h2 className="font-black uppercase text-lg text-gray-800">Menu Admin</h2><button onClick={() => setIsMobileMenuOpen(false)}><Icon name="X" size={24} /></button></div><div className="space-y-2"><p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-2">Administração</p>
                         {!isLeader && <NavItem active={view === 'create_events'} iconName="PlusCircle" label="Criar Eventos" onClick={() => { setView('create_events'); setIsMobileMenuOpen(false); }} open={true} />}
                         <NavItem active={view === 'manage_scales'} iconName="ListChecks" label="Gerenciar Escalas" onClick={() => { setView('manage_scales'); setIsMobileMenuOpen(false); }} open={true} />
+                        {(isLeader || !isLeader) && <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => { setView('view_scale'); setIsMobileMenuOpen(false); }} open={true} />}
                         {!isLeader && (
                             <>
-                                <NavItem active={view === 'view_scale'} iconName="Eye" label="Ver Escala" onClick={() => { setView('view_scale'); setIsMobileMenuOpen(false); }} open={true} />
                                 <NavItem active={view === 'manage_team'} iconName="Users" label="Equipe" onClick={() => { setView('manage_team'); setIsMobileMenuOpen(false); }} open={true} />
                                 <NavItem active={view === 'manage_depts'} iconName="Cone" label="Departamentos" onClick={() => { setView('manage_depts'); setIsMobileMenuOpen(false); }} open={true} />
                                 <NavItem active={view === 'reports'} iconName="BarChart3" label={appSettings.tabNames.reports} onClick={() => { setView('reports'); setIsMobileMenuOpen(false); }} open={true} />
@@ -1675,10 +1806,11 @@
                         {view === 'dashboard' && !isLeader && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}
                         {view === 'agenda' && !isLeader && <AgendaView title={appSettings.tabNames.agenda} category="Agenda Ministerial" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
                         {view === 'congressos' && !isLeader && <AgendaView title={appSettings.tabNames.congressos} category="Congressos" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
-                        {view === 'view_scale' && isAdmin && !isLeader && <ViewScaleView events={events} attendance={attendance} departments={departments} />}
+                        {view === 'view_scale' && isAdmin && (isLeader || !isLeader) && <ViewScaleView events={events} attendance={attendance} departments={departments} />}
+                        {view === 'view_scale_draft' && isAdmin && <ViewScaleView events={events} attendance={attendance} departments={departments} showDrafts={true} />}
                         {view === 'depts' && <UserDepartments title={appSettings.tabNames.departments} departments={departments} userProfile={userData} />}
                         {isAdmin && view === 'create_events' && !isLeader && <AdminCreateEventsView events={events} showToast={showToast} />}
-                        {isAdmin && view === 'manage_scales' && <AdminScalesView events={events} attendance={attendance} users={allUsers} departments={departments} showToast={showToast} isLeader={isLeader} />}
+                        {isAdmin && view === 'manage_scales' && <AdminScalesView events={events} attendance={attendance} users={allUsers} departments={departments} showToast={showToast} isLeader={isLeader} onNavigate={setView} />}
                         {isAdmin && view === 'manage_team' && !isLeader && <AdminTeamView users={allUsers} departments={departments} showToast={showToast} />}
                         {isAdmin && view === 'manage_depts' && !isLeader && <AdminDepartmentsView departments={departments} showToast={showToast} />}
                         {isAdmin && view === 'reports' && !isLeader && <ReportsView title={appSettings.tabNames.reports} attendance={attendance} allUsers={allUsers} departments={departments} />}

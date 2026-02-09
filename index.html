@@ -92,7 +92,7 @@
 
         // --- Constants ---
         const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-        const YEARS = [2024, 2025, 2026, 2027, 2028, 2029, 3030];
+        const YEARS = [2024, 2025, 2026, 2027, 2028, 2029, 2030];
         
         // --- Utilities ---
         const Icon = ({ name, size = 20, className = "", strokeWidth = 2.5, style = {} }) => {
@@ -111,6 +111,54 @@
                 }
             }, [name, size, className, strokeWidth, style]);
             return <span ref={containerRef} className="inline-flex items-center justify-center leading-none" style={style}></span>;
+        };
+
+        // --- NEW: Universal Calendar Export (.ics) ---
+        const downloadICS = (myAttendance, events) => {
+            if (!myAttendance || myAttendance.length === 0) {
+                alert("Você não possui escalas confirmadas para sincronizar.");
+                return;
+            }
+
+            let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//MidiaADPerus//Escalas//PT-BR\nCALSCALE:GREGORIAN\nMETHOD:PUBLISH\n";
+
+            myAttendance.forEach(att => {
+                // Only future and present events
+                const evt = events.find(e => e.id === att.eventId);
+                if (att.status === 'present' && att.isEscalated && evt) {
+                    const start = new Date(`${evt.date}T${evt.time}:00`);
+                    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000); // 2 hours duration
+
+                    const formatDate = (date) => date.toISOString().replace(/-|:|\.\d+/g, "");
+
+                    icsContent += "BEGIN:VEVENT\n";
+                    icsContent += `UID:${att.id}@midiaadperus.app\n`;
+                    icsContent += `DTSTAMP:${formatDate(new Date())}\n`;
+                    icsContent += `DTSTART:${formatDate(start)}\n`;
+                    icsContent += `DTEND:${formatDate(end)}\n`;
+                    icsContent += `SUMMARY:Escala Mídia: ${evt.name}\n`;
+                    icsContent += `DESCRIPTION:Função: ${att.role || att.servingDept} | Local: ${evt.location || 'Sede'}\n`;
+                    icsContent += `LOCATION:${evt.location || 'AD Perus'}\n`;
+                    icsContent += `STATUS:CONFIRMED\n`;
+                    
+                    // Alarm: 1 Day Before
+                    icsContent += "BEGIN:VALARM\nTRIGGER:-P1D\nDESCRIPTION:Lembrete de Escala (Amanhã)\nACTION:DISPLAY\nEND:VALARM\n";
+                    // Alarm: 1 Hour Before
+                    icsContent += "BEGIN:VALARM\nTRIGGER:-PT1H\nDESCRIPTION:Lembrete de Escala (1h)\nACTION:DISPLAY\nEND:VALARM\n";
+                    
+                    icsContent += "END:VEVENT\n";
+                }
+            });
+
+            icsContent += "END:VCALENDAR";
+
+            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.setAttribute('download', 'minhas_escalas.ics');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         };
 
         const CustomStyles = ({ primaryColor }) => (
@@ -138,6 +186,29 @@
             );
         };
 
+        // --- NEW: Calendar & Notification Utils ---
+        const requestNotificationPermission = async () => {
+            if (!("Notification" in window)) return;
+            if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                await Notification.requestPermission();
+            }
+        };
+
+        const checkDailySchedule = (myAttendance) => {
+            if (!("Notification" in window) || Notification.permission !== "granted") return;
+            
+            const today = new Date().toISOString().split('T')[0];
+            const myEventsToday = myAttendance.filter(a => a.eventDate === today && a.isEscalated);
+
+            if (myEventsToday.length > 0) {
+                const eventNames = myEventsToday.map(e => e.eventName).join(', ');
+                new Notification("Lembrete de Escala 🎥", {
+                    body: `Hoje você está escalado para: ${eventNames}. Não se esqueça!`,
+                    icon: "https://cdn-icons-png.flaticon.com/512/3652/3652191.png"
+                });
+            }
+        };
+
         const ConfirmModal = ({ title, message, onConfirm, onCancel, confirmText = "Confirmar", cancelText = "Cancelar", isDangerous = false }) => (
             <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 modal-overlay">
                 <div className="bg-white rounded-[2rem] w-full max-w-md p-6 shadow-2xl animate-in text-center">
@@ -153,6 +224,43 @@
                 </div>
             </div>
         );
+
+        // --- Reminder Modal Component ---
+        const ReminderModal = ({ reminders, onClose }) => {
+            if (!reminders || reminders.length === 0) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black/60 z-[80] flex items-center justify-center p-4 modal-overlay backdrop-blur-sm">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in text-center relative border-4 border-yellow-400">
+                        <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6 text-yellow-500 shadow-inner">
+                            <Icon name="BellRing" size={40} className="animate-pulse" />
+                        </div>
+                        <h3 className="text-2xl font-black uppercase text-gray-800 mb-2 tracking-tight">Lembrete de Escala</h3>
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-6">Atenção para suas próximas datas</p>
+                        
+                        <div className="space-y-3 mb-8">
+                            {reminders.map((r, idx) => (
+                                <div key={idx} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
+                                    <div className={`p-3 rounded-xl ${r.type === 'today' ? 'bg-red-100 text-red-600' : r.type === 'tomorrow' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+                                        <Icon name={r.type === 'today' ? 'AlertCircle' : 'Calendar'} size={20} />
+                                    </div>
+                                    <div>
+                                        <p className="font-black text-xs uppercase text-gray-800">{r.eventName}</p>
+                                        <p className={`text-[10px] font-bold uppercase ${r.type === 'today' ? 'text-red-500' : r.type === 'tomorrow' ? 'text-orange-500' : 'text-blue-500'}`}>
+                                            {r.msg}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button onClick={onClose} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-xl hover:bg-gray-800 transition transform active:scale-95">
+                            Entendido, Vou Comparecer!
+                        </button>
+                    </div>
+                </div>
+            );
+        };
 
         const getPeriodStyle = (period) => {
             switch(period) {
@@ -247,7 +355,8 @@
             );
         }
 
-        function AuthScreen({ onLogin, error, isProcessing, settings }) {
+        function AuthScreen({ onLogin, onForceReset, error, isProcessing, settings }) {
+            const [showPassword, setShowPassword] = useState(false);
             const bannerBg = settings.loginBannerUrl 
                 ? { backgroundImage: `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), url(${settings.loginBannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
                 : { backgroundColor: settings.primaryColor || '#3b82f6' };
@@ -277,7 +386,10 @@
                                     </div>
                                     <div className="relative">
                                         <Icon name="Lock" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                        <input name="password" type="password" placeholder="Senha" required className="w-full pl-12 pr-4 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 transition text-gray-800" />
+                                        <input name="password" type={showPassword ? "text" : "password"} placeholder="Senha" required className="w-full pl-12 pr-12 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-primary/20 transition text-gray-800" />
+                                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                            <Icon name={showPassword ? "EyeOff" : "Eye"} size={18} />
+                                        </button>
                                     </div>
                                 </div>
                                
@@ -291,7 +403,12 @@
                                     {isProcessing ? "Verificando..." : "Entrar no Portal"}
                                 </button>
                             </form>
-                            <p className="text-center mt-6 text-[10px] text-gray-400 font-bold uppercase">Problemas com acesso? Procure a liderança.</p>
+                            <div className="text-center mt-6">
+                                <p className="text-[10px] text-gray-400 font-bold uppercase">Problemas com acesso?</p>
+                                <button onClick={onForceReset} className="mt-2 text-[9px] text-red-400 font-black uppercase border border-red-100 bg-red-50 px-3 py-1 rounded-lg hover:bg-red-100 transition">
+                                    Restaurar Acesso Padrão
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -301,6 +418,7 @@
         function DashboardView({ userProfile, attendance, events, settings }) {
             const [month, setMonth] = useState(new Date().getMonth());
             const [year, setYear] = useState(new Date().getFullYear());
+            const [reminders, setReminders] = useState([]);
 
             const filteredAtt = useMemo(() => attendance.filter(a => {
                 if (!a.eventDate) return false;
@@ -309,6 +427,37 @@
                        d.getUTCMonth() === Number(month) && 
                        d.getUTCFullYear() === Number(year);
             }), [attendance, userProfile.uid, month, year]);
+
+            // Automatic Reminder Logic (On Mount)
+            useEffect(() => {
+                if (!attendance || attendance.length === 0) return;
+                
+                const activeReminders = [];
+                const today = new Date();
+                today.setHours(0,0,0,0);
+
+                attendance.forEach(att => {
+                    if (att.userId === userProfile.uid && att.isEscalated) {
+                        const eventDate = new Date(att.eventDate + 'T12:00:00');
+                        eventDate.setHours(0,0,0,0);
+                        
+                        const diffTime = eventDate - today;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+                        if (diffDays === 0) {
+                            activeReminders.push({ type: 'today', msg: 'HOJE! Você tem escala.', eventName: att.eventName });
+                        } else if (diffDays === 1) {
+                            activeReminders.push({ type: 'tomorrow', msg: 'AMANHÃ! Prepare-se para sua escala.', eventName: att.eventName });
+                        } else if (diffDays === 5) {
+                            activeReminders.push({ type: 'upcoming', msg: 'Faltam 5 dias para sua escala.', eventName: att.eventName });
+                        }
+                    }
+                });
+
+                if (activeReminders.length > 0) {
+                    setReminders(activeReminders);
+                }
+            }, [attendance, userProfile.uid]);
 
             const stats = {
                 available: filteredAtt.filter(a => a.status === 'present').length,
@@ -320,9 +469,21 @@
                 }).length
             };
 
+            const getEventDetails = (eventId) => events.find(e => e.id === eventId);
+
             return (
                 <div className="space-y-6">
-                    <FilterHeader title={`Olá, ${userProfile.name?.split(' ')[0]}`} month={month} setMonth={setMonth} year={year} setYear={setYear} />
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <FilterHeader title={`Olá, ${userProfile.name?.split(' ')[0]}`} month={month} setMonth={setMonth} year={year} setYear={setYear} />
+                        
+                        <button 
+                            onClick={() => downloadICS(attendance.filter(a => a.userId === userProfile.uid), events)}
+                            className="bg-gray-800 text-white px-4 py-3 rounded-xl font-black uppercase text-[10px] flex items-center gap-2 hover:bg-gray-700 transition shadow-lg shadow-gray-200 w-full md:w-auto justify-center"
+                        >
+                            <Icon name="Smartphone" size={16} /> Sincronizar com Celular (iOS/Android)
+                        </button>
+                    </div>
+
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                         <StatCard title="Disponível" value={stats.available} iconName="CheckCircle" iconColor="text-green-500" />
                         <StatCard title="Indisponível" value={stats.unavailable} iconName="XCircle" iconColor="text-red-500" />
@@ -332,20 +493,28 @@
                     <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border shadow-sm">
                         <h2 className="text-lg md:text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2 text-gray-800"><Icon name="FileText" className="text-primary" /> Histórico</h2>
                         <div className="divide-y divide-gray-50">
-                            {filteredAtt.map(a => (
-                                <div key={a.id} className="py-4 flex justify-between items-center">
-                                    <div>
-                                        <p className="font-bold uppercase text-[10px] md:text-xs text-gray-800">{a.eventName}</p>
-                                        <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tight">{a.servingDept} • {new Date(a.eventDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
+                            {filteredAtt.map(a => {
+                                const ev = getEventDetails(a.eventId);
+                                return (
+                                    <div key={a.id} className="py-4 flex flex-col md:flex-row justify-between md:items-center gap-4">
+                                        <div>
+                                            <p className="font-bold uppercase text-[10px] md:text-xs text-gray-800">{a.eventName}</p>
+                                            <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tight">{a.servingDept} • {new Date(a.eventDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
+                                        </div>
+                                        <div className="flex gap-2 items-center">
+                                            {/* Button Removed Here as Requested */}
+                                            <span className={`px-2 py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase ${a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                                {a.status === 'present' ? "Disponível" : "Ausente"}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <span className={`px-2 py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase ${a.status === 'present' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                                        {a.status === 'present' ? "Disponível" : "Ausente"}
-                                    </span>
-                                </div>
-                            ))}
+                                );
+                            })}
                             {filteredAtt.length === 0 && <p className="py-10 text-center text-gray-300 font-bold uppercase text-[10px]">Nenhum registro encontrado</p>}
                         </div>
                     </div>
+                    {/* Reminder Modal Triggered Automatically */}
+                    <ReminderModal reminders={reminders} onClose={() => setReminders([])} />
                 </div>
             );
         }
@@ -1317,7 +1486,7 @@
                                         {departments.map(d => (
                                             <button key={d.id} onClick={() => setScaleModalDept(d.name)} className={`px-4 py-2 rounded-xl border-2 transition-all whitespace-nowrap text-[10px] font-black uppercase ${scaleModalDept === d.name ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-100 text-gray-500'}`}>{d.name}</button>
                                         ))}
-                                    </div>
+                                     </div>
 
                                     {/* Column 2: Available Volunteers */}
                                     {!showContext && (
@@ -1677,110 +1846,102 @@
             useEffect(() => { if (!firebaseUser) return; const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (docSnap) => { if (docSnap.exists()) { setAppSettings(prev => ({ ...prev, ...docSnap.data() })); } }); return () => unsubSettings(); }, [firebaseUser]);
             const handleUpdateSettings = async (newSettings) => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), newSettings, { merge: true }); setToastMsg("Configurações salvas!"); } catch (e) { console.error(e); setToastMsg("Erro ao salvar."); } };
             
-            // Self-heal Master Role Logic
-            useEffect(() => {
+            // Self-heal Master Role Logic and Seeding
+            const seedData = async (force = false) => {
                 if (!firebaseUser) return;
-                const enforceMasterPrivileges = async () => {
-                    try {
-                        const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master');
-                        const docSnap = await getDoc(masterRef);
-                        // If master exists but has wrong role, fix it
-                        if (docSnap.exists() && docSnap.data().role !== 'master') {
-                             await updateDoc(masterRef, { role: 'master' });
-                             console.log("Permissões de Master restauradas.");
-                        }
-                    } catch(e) { console.error(e); }
+                
+                // FORCE MASTER RESET (CRITICAL FIX)
+                const masterId = 'master';
+                const masterData = { 
+                    name: "Master", 
+                    username: "Master", 
+                    password: "adm2026", 
+                    role: "master", 
+                    status: 'active', 
+                    unitType: 'Geral', 
+                    unitName: 'Sede', 
+                    participatingDepts: [], 
+                    updatedAt: new Date().toISOString()
                 };
-                enforceMasterPrivileges();
-            }, [firebaseUser]);
+                
+                const liderId = 'lider';
+                const liderData = { 
+                    name: "Lider", 
+                    username: "Lider", 
+                    password: "lider2026", 
+                    role: "admin", 
+                    specialRole: "leader", 
+                    status: 'active', 
+                    unitType: 'Regional', 
+                    unitName: 'Sede', 
+                    participatingDepts: [], 
+                    updatedAt: new Date().toISOString() 
+                };
+
+                try {
+                    // Check if seeding is needed or forced
+                    const masterDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', masterId));
+                    
+                    if (!masterDoc.exists() || force) {
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', masterId), { ...masterData, createdAt: new Date().toISOString() }, { merge: true });
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', liderId), { ...liderData, createdAt: new Date().toISOString() }, { merge: true });
+                        
+                        if (!masterDoc.exists()) {
+                            // Seed other users only on first run
+                            const initialUsers = [ 
+                                { name: "Areli Castro", pass: "areli2026", role: "user" }, 
+                                { name: "Isabelle Neves", pass: "belle2026", role: "user" }, 
+                                { name: "Felipe Silva", pass: "felipe2026", role: "user" }, 
+                                { name: "Adriel Carvalho", pass: "adriel2026", role: "user" }, 
+                                { name: "Charles Santos", pass: "charles2026", role: "user" }, 
+                                { name: "Leandro da Silva", pass: "leo2026", role: "user" }, 
+                                { name: "Leandro Cavalcante", pass: "leo2026", role: "user" }, 
+                                { name: "Julia Gonçalves", pass: "julia2026", role: "user" }, 
+                                { name: "Macário", pass: "macario2026", role: "user" }, 
+                                { name: "Maranhão", pass: "maranhao2026", role: "user" }, 
+                                { name: "Bruno Ventura", pass: "bruno2026", role: "user" } 
+                            ]; 
+                            const batch = writeBatch(db); 
+                            initialUsers.forEach(u => { 
+                                const id = u.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, '_'); 
+                                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id); 
+                                batch.set(docRef, { 
+                                    name: u.name, 
+                                    username: u.name, 
+                                    password: u.pass, 
+                                    role: u.role, 
+                                    status: 'active', 
+                                    unitType: u.role === 'master' ? 'Geral' : 'Regional', 
+                                    unitName: 'Sede', 
+                                    participatingDepts: [], 
+                                    createdAt: new Date().toISOString(),
+                                    ...(u.specialRole ? { specialRole: u.specialRole } : {})
+                                }); 
+                            }); 
+                            await batch.commit();
+                        }
+                        return true;
+                    }
+                } catch(e) { console.error("Seeding Error:", e); return false; }
+            };
 
             useEffect(() => { 
-                if (!firebaseUser) return; 
-                const seedData = async () => { 
-                    const masterDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', 'master')); 
-                    
-                    // Master Seeding (Existing Logic)
-                    if (!masterDoc.exists()) { 
-                        const initialUsers = [ 
-                            { name: "Master", pass: "adm2026", role: "master" }, 
-                            { name: "Areli Castro", pass: "areli2026", role: "user" }, 
-                            { name: "Lider", pass: "lider2026", role: "admin", specialRole: "leader" }, 
-                            { name: "Isabelle Neves", pass: "belle2026", role: "user" }, 
-                            { name: "Felipe Silva", pass: "felipe2026", role: "user" }, 
-                            { name: "Adriel Carvalho", pass: "adriel2026", role: "user" }, 
-                            { name: "Charles Santos", pass: "charles2026", role: "user" }, 
-                            { name: "Leandro da Silva", pass: "leo2026", role: "user" }, 
-                            { name: "Leandro Cavalcante", pass: "leo2026", role: "user" }, 
-                            { name: "Julia Gonçalves", pass: "julia2026", role: "user" }, 
-                            { name: "Macário", pass: "macario2026", role: "user" }, 
-                            { name: "Maranhão", pass: "maranhao2026", role: "user" }, 
-                            { name: "Bruno Ventura", pass: "bruno2026", role: "user" } 
-                        ]; 
-                        const batch = writeBatch(db); 
-                        initialUsers.forEach(u => { 
-                            const id = u.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, '_'); 
-                            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', id); 
-                            batch.set(docRef, { 
-                                name: u.name, 
-                                username: u.name, 
-                                password: u.pass, 
-                                role: u.role, 
-                                status: 'active', 
-                                unitType: u.role === 'master' ? 'Geral' : 'Regional', 
-                                unitName: 'Sede', 
-                                participatingDepts: [], 
-                                createdAt: new Date().toISOString(),
-                                ...(u.specialRole ? { specialRole: u.specialRole } : {})
-                            }); 
-                        }); 
-                        await batch.commit(); 
-                    } 
-
-                    // FORCE MASTER RESET (CRITICAL FIX)
-                    // This ensures Master always exists with correct credentials
-                    const masterId = 'master';
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', masterId), { 
-                        name: "Master", 
-                        username: "Master", 
-                        password: "adm2026", 
-                        role: "master", 
-                        status: 'active', 
-                        unitType: 'Geral', 
-                        unitName: 'Sede', 
-                        participatingDepts: [], 
-                        createdAt: new Date().toISOString() 
-                    }, { merge: true });
-
-                    // FORCE LEADER CHECK (CRITICAL FIX)
-                    const liderId = 'lider';
-                    const liderDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', liderId));
-                    if (!liderDoc.exists()) {
-                         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', liderId), { 
-                            name: "Lider", 
-                            username: "Lider", 
-                            password: "lider2026", 
-                            role: "admin", 
-                            specialRole: "leader", 
-                            status: 'active', 
-                            unitType: 'Regional', 
-                            unitName: 'Sede', 
-                            participatingDepts: [], 
-                            createdAt: new Date().toISOString() 
-                        });
-                        console.log("Usuário Lider restaurado.");
-                    }
-                }; 
-                seedData(); 
+                if (firebaseUser) seedData(); 
             }, [firebaseUser]);
 
-            useEffect(() => { if (!firebaseUser || !userData) return; const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); setUserData({ uid: docSnap.id, ...data }); } }); const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => { if (snap.empty) { ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' })); } else { setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() }))); } }); let unsubAllUsers = () => {}; if (userData.role === 'admin' || userData.role === 'master') { unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })))); } return () => { unsubProfile(); unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); }; }, [firebaseUser, userData?.uid, userData?.role]);
+            useEffect(() => { if (!firebaseUser || !userData) return; const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); setUserData({ uid: docSnap.id, ...data }); } }); const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => {
+                const attData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                setAttendance(attData);
+                // Check Schedule for Notifications
+                checkDailySchedule(attData.filter(a => a.userId === userData.uid));
+            }); const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => { if (snap.empty) { ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' })); } else { setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() }))); } }); let unsubAllUsers = () => {}; if (userData.role === 'admin' || userData.role === 'master') { unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })))); } return () => { unsubProfile(); unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); }; }, [firebaseUser, userData?.uid, userData?.role]);
 
             const handleLogin = async (e) => { 
                 e.preventDefault(); 
                 setLoginError(null); 
                 setAuthLoading(true); 
-                const username = e.target.username.value; 
-                const password = e.target.password.value; 
+                const username = e.target.username.value.trim(); 
+                const password = e.target.password.value.trim(); 
                 try { 
                     if (!firebaseUser) await signInAnonymously(auth); 
                     // Normalize username to remove accents and force lowercase (e.g. "Líder" -> "lider")
@@ -1790,6 +1951,9 @@
                     if (userSnap.exists() && userSnap.data().password === password) { 
                         const userData = userSnap.data();
                         setUserData({ uid: userSnap.id, ...userData });
+                        // Request Notification Permission on Login
+                        requestNotificationPermission();
+                        
                         // Redirect Logic for Leader
                         if (userData.specialRole === 'leader' || userData.name === "Lider" || userData.name === "Liderança") {
                             setView('manage_scales');
@@ -1804,6 +1968,21 @@
             const handleLogout = () => { setUserData(null); setView('dashboard'); };
             const showToast = (msg) => setToastMsg(msg);
 
+            const handleForceReset = async () => {
+                if (confirm("Isso irá restaurar os usuários Master (senha: adm2026) e Lider (senha: lider2026). Deseja continuar?")) {
+                    setAuthLoading(true);
+                    try {
+                        if (!firebaseUser) await signInAnonymously(auth);
+                        await seedData(true);
+                        setToastMsg("Acesso restaurado! Tente logar com Master / adm2026.");
+                    } catch(e) {
+                        setLoginError("Erro ao restaurar.");
+                    } finally {
+                        setAuthLoading(false);
+                    }
+                }
+            };
+
             const handleUpdateProfile = async (updates) => {
                 try {
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), updates);
@@ -1815,7 +1994,7 @@
                 }
             };
 
-            if (!userData) return <AuthScreen onLogin={handleLogin} error={loginError} isProcessing={authLoading} settings={appSettings} />;
+            if (!userData) return <AuthScreen onLogin={handleLogin} onForceReset={handleForceReset} error={loginError} isProcessing={authLoading} settings={appSettings} />;
             if (userData.status === 'blocked') return <BlockedScreen onLogout={handleLogout} />;
 
             const isAdmin = userData.role === 'admin' || userData.role === 'master';

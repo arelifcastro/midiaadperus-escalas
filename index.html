@@ -350,6 +350,68 @@
             );
         }
 
+        function ProfileView({ userProfile, onUpdateProfile, showToast }) {
+            const [imageUrl, setImageUrl] = useState(userProfile.imageUrl || '');
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.size > 2000000) {
+                        showToast("A imagem deve ter menos de 2MB.");
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setImageUrl(reader.result);
+                        onUpdateProfile({ imageUrl: reader.result });
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            return (
+                <div className="max-w-2xl mx-auto space-y-8">
+                    <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-gray-800">Meu Perfil</h1>
+                    
+                    <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm flex flex-col items-center text-center">
+                        <div className="relative group">
+                            <div className="w-32 h-32 rounded-full bg-gray-100 border-4 border-white shadow-xl overflow-hidden flex items-center justify-center text-4xl font-black text-gray-300 uppercase mb-4">
+                                {imageUrl ? <img src={imageUrl} className="w-full h-full object-cover" /> : userProfile.name.charAt(0)}
+                            </div>
+                            <label className="absolute bottom-4 right-0 p-2 bg-purple-600 text-white rounded-full shadow-lg cursor-pointer hover:bg-purple-700 transition transform hover:scale-110">
+                                <Icon name="Camera" size={20} />
+                                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                            </label>
+                        </div>
+                        <p className="text-xs text-gray-400 font-bold uppercase mt-2">Clique na câmera para alterar (Máx 2MB)</p>
+                    </div>
+
+                    <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400">Nome Completo</label>
+                            <div className="w-full p-4 bg-gray-50 rounded-xl font-bold text-sm text-gray-600 border border-gray-100">
+                                {userProfile.name}
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400">Senha de Acesso</label>
+                            <div className="w-full p-4 bg-gray-50 rounded-xl font-bold text-sm text-gray-600 border border-gray-100 flex justify-between items-center">
+                                <span>{userProfile.password}</span>
+                                <Icon name="Lock" size={16} className="text-gray-400" />
+                            </div>
+                            <p className="text-[9px] text-gray-400 font-bold uppercase ml-1">* A senha não pode ser alterada por aqui. Contate a liderança.</p>
+                        </div>
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400">Função</label>
+                            <div className="w-full p-4 bg-gray-50 rounded-xl font-bold text-sm text-gray-600 border border-gray-100">
+                                 {userProfile.role === 'master' ? 'Master Admin' : userProfile.role === 'admin' ? 'Liderança' : 'Voluntário'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         function AgendaView({ events, attendance, userProfile, departments, category, showToast, title }) {
             const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
             const [filterYear, setFilterYear] = useState(new Date().getFullYear());
@@ -1711,8 +1773,6 @@
                 seedData(); 
             }, [firebaseUser]);
 
-            useEffect(() => { if (!firebaseUser || !userData) return; const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); setUserData({ uid: docSnap.id, ...data }); } }); const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubAtt = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), (snap) => setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })))); const unsubDepts = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), (snap) => { if (snap.empty) { ['Câmera', 'Som', 'Projeção', 'Fotografia'].forEach(name => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'departments'), { name, color: '#3b82f6', leader: 'Geral' })); } else { setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() }))); } }); let unsubAllUsers = () => {}; if (userData.role === 'admin' || userData.role === 'master') { unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })))); } return () => { unsubProfile(); unsubEvents(); unsubAtt(); unsubDepts(); unsubAllUsers(); }; }, [firebaseUser, userData?.uid, userData?.role]);
-
             const handleLogin = async (e) => { 
                 e.preventDefault(); 
                 setLoginError(null); 
@@ -1741,6 +1801,17 @@
             };
             const handleLogout = () => { setUserData(null); setView('dashboard'); };
             const showToast = (msg) => setToastMsg(msg);
+
+            const handleUpdateProfile = async (updates) => {
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userData.uid), updates);
+                    setUserData(prev => ({ ...prev, ...updates }));
+                    showToast("Perfil atualizado com sucesso!");
+                } catch (e) {
+                    console.error(e);
+                    showToast("Erro ao atualizar perfil.");
+                }
+            };
 
             if (!userData) return <AuthScreen onLogin={handleLogin} error={loginError} isProcessing={authLoading} settings={appSettings} />;
             if (userData.status === 'blocked') return <BlockedScreen onLogout={handleLogout} />;
@@ -1781,6 +1852,8 @@
                                 </>
                             )}
                             </>)}
+                            <div className="my-2"></div>
+                            <NavItem active={view === 'profile'} iconName="UserCircle" label="Meu Perfil" onClick={() => setView('profile')} open={true} />
                         </nav>
                         <div className="mt-8 pt-6 border-t border-gray-100 flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-black text-gray-500 uppercase overflow-hidden">{userData.imageUrl ? <img src={userData.imageUrl} className="w-full h-full object-cover" /> : userData.name.charAt(0)}</div><div className="flex-1 overflow-hidden"><p className="font-bold text-xs truncate text-gray-800">{userData.name}</p><button onClick={handleLogout} className="text-[10px] text-red-400 font-bold uppercase hover:text-red-600">Sair</button></div></div>
                     </aside>
@@ -1798,6 +1871,8 @@
                                 <NavItem active={view === 'admin_master'} iconName="Settings" label="Admin Master" onClick={() => { setView('admin_master'); setIsMobileMenuOpen(false); }} open={true} />
                             </>
                         )}
+                        <div className="my-2"></div>
+                        <NavItem active={view === 'profile'} iconName="UserCircle" label="Meu Perfil" onClick={() => { setView('profile'); setIsMobileMenuOpen(false); }} open={true} />
                         </div></div></div>)}
                     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-2 pb-safe flex justify-around items-center z-50 no-print shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                              {!isLeader && (
@@ -1811,16 +1886,17 @@
                                  <button onClick={() => setView('manage_scales')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'manage_scales' ? 'text-primary' : 'text-gray-400'}`}><Icon name="ListChecks" size={20} strokeWidth={view === 'manage_scales' ? 2.5 : 2} /><span className="text-[9px] font-bold">Escalas</span></button>
                              )}
                              {(isLeader || !isLeader) && <button onClick={() => setView('view_scale')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'view_scale' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Eye" size={20} strokeWidth={view === 'view_scale' ? 2.5 : 2} /><span className="text-[9px] font-bold">Ver Escala</span></button>}
-                             <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>
-                             <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-400"><Icon name="LogOut" size={20} /><span className="text-[9px] font-bold">Sair</span></button>
+                             {!isLeader && <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>}
+                             <button onClick={() => setView('profile')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'profile' ? 'text-primary' : 'text-gray-400'}`}><Icon name="UserCircle" size={20} strokeWidth={view === 'profile' ? 2.5 : 2} /><span className="text-[9px] font-bold">Perfil</span></button>
                     </div>
                     <main className={`flex-1 md:ml-72 p-4 md:p-12 mb-24 md:mb-0 max-w-7xl mx-auto w-full ${isAdmin ? 'mt-16 md:mt-0' : ''}`}>
                         {view === 'dashboard' && !isLeader && <DashboardView userProfile={userData} attendance={attendance} events={events} settings={appSettings} />}
                         {view === 'agenda' && !isLeader && <AgendaView title={appSettings.tabNames.agenda} category="Agenda Ministerial" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
                         {view === 'congressos' && !isLeader && <AgendaView title={appSettings.tabNames.congressos} category="Congressos" events={events} attendance={attendance} userProfile={userData} departments={departments} showToast={showToast} />}
-                        {view === 'view_scale' && isAdmin && (isLeader || !isLeader) && <ViewScaleView events={events} attendance={attendance} departments={departments} />}
+                        {view === 'view_scale' && (isAdmin || isLeader) && <ViewScaleView events={events} attendance={attendance} departments={departments} />}
                         {view === 'view_scale_draft' && isAdmin && <ViewScaleView events={events} attendance={attendance} departments={departments} showDrafts={true} />}
                         {view === 'depts' && <UserDepartments title={appSettings.tabNames.departments} departments={departments} userProfile={userData} />}
+                        {view === 'profile' && <ProfileView userProfile={userData} onUpdateProfile={handleUpdateProfile} showToast={showToast} />}
                         {isAdmin && view === 'create_events' && !isLeader && <AdminCreateEventsView events={events} showToast={showToast} />}
                         {isAdmin && view === 'manage_scales' && <AdminScalesView events={events} attendance={attendance} users={allUsers} departments={departments} showToast={showToast} isLeader={isLeader} onNavigate={setView} />}
                         {isAdmin && view === 'manage_team' && !isLeader && <AdminTeamView users={allUsers} departments={departments} showToast={showToast} />}

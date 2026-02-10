@@ -541,7 +541,7 @@
             );
         }
 
-        function ProfileView({ userProfile, onUpdateProfile, showToast }) {
+        function ProfileView({ userProfile, onUpdateProfile, showToast, onLogout }) {
             const [imageUrl, setImageUrl] = useState(userProfile.imageUrl || '');
             const [whatsapp, setWhatsapp] = useState(userProfile.whatsapp || '');
 
@@ -619,6 +619,10 @@
                                  {userProfile.role === 'master' ? 'Master Admin' : userProfile.role === 'admin' ? 'Liderança' : 'Voluntário'}
                             </div>
                         </div>
+
+                        <button onClick={onLogout} className="w-full py-4 bg-red-100 text-red-500 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-red-200 transition mt-6">
+                            Sair da Conta
+                        </button>
                     </div>
                 </div>
             );
@@ -1831,6 +1835,7 @@
             );
         }
 
+        // --- MasterSettingsView remains same ---
         function MasterSettingsView({ settings, onUpdateSettings, showToast }) {
             const [form, setForm] = useState(settings);
             useEffect(() => { setForm(settings); }, [settings]);
@@ -2003,7 +2008,7 @@
                              {isLeader && (
                                  <button onClick={() => setView('manage_scales')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'manage_scales' ? 'text-primary' : 'text-gray-400'}`}><Icon name="ListChecks" size={20} strokeWidth={view === 'manage_scales' ? 2.5 : 2} /><span className="text-[9px] font-bold">Escalas</span></button>
                              )}
-                             {(isLeader || !isLeader) && <button onClick={() => setView('view_scale')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'view_scale' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Eye" size={20} strokeWidth={view === 'view_scale' ? 2.5 : 2} /><span className="text-[9px] font-bold">Ver Escala</span></button>}
+                             {(isAdmin || isLeader) && <button onClick={() => setView('view_scale')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'view_scale' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Eye" size={20} strokeWidth={view === 'view_scale' ? 2.5 : 2} /><span className="text-[9px] font-bold">Ver Escala</span></button>}
                              {!isLeader && <button onClick={() => setView('depts')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'depts' ? 'text-primary' : 'text-gray-400'}`}><Icon name="Briefcase" size={20} strokeWidth={view === 'depts' ? 2.5 : 2} /><span className="text-[9px] font-bold">Equipe</span></button>}
                              <button onClick={() => setView('profile')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'profile' ? 'text-primary' : 'text-gray-400'}`}><Icon name="UserCircle" size={20} strokeWidth={view === 'profile' ? 2.5 : 2} /><span className="text-[9px] font-bold">Perfil</span></button>
                     </div>
@@ -2014,7 +2019,7 @@
                         {view === 'view_scale' && isAdmin && (isLeader || !isLeader) && <ViewScaleView events={events} attendance={attendance} departments={departments} />}
                         {view === 'view_scale_draft' && isAdmin && <ViewScaleView events={events} attendance={attendance} departments={departments} showDrafts={true} />}
                         {view === 'depts' && <UserDepartments title={appSettings.tabNames.departments} departments={departments} userProfile={userData} />}
-                        {view === 'profile' && <ProfileView userProfile={userData} onUpdateProfile={handleUpdateProfile} showToast={showToast} />}
+                        {view === 'profile' && <ProfileView userProfile={userData} onUpdateProfile={handleUpdateProfile} showToast={showToast} onLogout={handleLogout} />}
                         {isAdmin && view === 'create_events' && !isLeader && <AdminCreateEventsView events={events} showToast={showToast} />}
                         {isAdmin && view === 'manage_scales' && <AdminScalesView events={events} attendance={attendance} users={allUsers} departments={departments} showToast={showToast} isLeader={isLeader} onNavigate={setView} />}
                         {isAdmin && view === 'manage_team' && !isLeader && <AdminTeamView users={allUsers} departments={departments} showToast={showToast} />}

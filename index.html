@@ -116,11 +116,13 @@
         // --- NEW: Universal Calendar Export (.ics) ---
         const downloadICS = (myAttendance, events) => {
             if (!myAttendance || myAttendance.length === 0) {
-                alert("Você não possui escalas confirmadas para sincronizar.");
+                alert("Você não possui escalas registradas.");
                 return;
             }
 
-            let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//MidiaADPerus//Escalas//PT-BR\nCALSCALE:GREGORIAN\nMETHOD:PUBLISH\n";
+            // Standard ICS line break
+            const CRLF = "\r\n";
+            let icsContent = `BEGIN:VCALENDAR${CRLF}VERSION:2.0${CRLF}PRODID:-//MidiaADPerus//Escalas//PT-BR${CRLF}CALSCALE:GREGORIAN${CRLF}METHOD:PUBLISH${CRLF}`;
 
             // Helper for Floating Time (No Timezone Shift)
             const formatFloating = (date) => {
@@ -134,51 +136,66 @@
             };
 
             const now = new Date();
+            // Filter events starting from yesterday to ensure recent missed ones are included if needed, 
+            // but primarily focus on future.
             const yesterday = new Date(now);
             yesterday.setDate(yesterday.getDate() - 1); 
 
+            let eventCount = 0;
+
             myAttendance.forEach(att => {
                 const evt = events.find(e => e.id === att.eventId);
-                if (att.status === 'present' && att.isEscalated && evt) {
+                
+                // CRITICAL CHECKS:
+                // 1. Must be present
+                // 2. Must be escalated by admin
+                // 3. Event must exist
+                // 4. Event must be PUBLISHED (scaleStatus === 'ready')
+                if (att.status === 'present' && att.isEscalated && evt && evt.scaleStatus === 'ready') {
                     const start = new Date(`${evt.date}T${evt.time}:00`);
                     
-                    // Filter out old events (older than yesterday) to keep calendar clean
+                    // Skip old events to keep calendar clean
                     if (start < yesterday) return;
 
-                    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000); 
+                    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000); // 2 hours duration by default
 
-                    icsContent += "BEGIN:VEVENT\n";
-                    icsContent += `UID:${att.id}@midiaadperus.app\n`; 
-                    icsContent += `DTSTAMP:${now.toISOString().replace(/-|:|\.\d+/g, "")}\n`; 
-                    icsContent += `DTSTART:${formatFloating(start)}\n`;
-                    icsContent += `DTEND:${formatFloating(end)}\n`;
-                    icsContent += `SUMMARY:Escala Mídia: ${evt.name}\n`;
-                    icsContent += `DESCRIPTION:Função: ${att.role || att.servingDept} | Local: ${evt.location || 'Sede'}\n`;
-                    icsContent += `LOCATION:${evt.location || 'AD Perus'}\n`;
-                    icsContent += `STATUS:CONFIRMED\n`;
-                    
-                    // --- 5 ALARMS CONFIGURATION ---
-                    
-                    // 1. 3 Days Before
-                    icsContent += "BEGIN:VALARM\nTRIGGER:-P3D\nDESCRIPTION:Lembrete de Escala (3 Dias)\nACTION:DISPLAY\nEND:VALARM\n";
-                    
-                    // 2. 1 Day Before
-                    icsContent += "BEGIN:VALARM\nTRIGGER:-P1D\nDESCRIPTION:Lembrete de Escala (Amanhã)\nACTION:DISPLAY\nEND:VALARM\n";
-                    
-                    // 3. 12 Hours Before (Serves as "Morning of/Day of")
-                    icsContent += "BEGIN:VALARM\nTRIGGER:-PT12H\nDESCRIPTION:Lembrete de Escala (Hoje)\nACTION:DISPLAY\nEND:VALARM\n";
+                    // Unique Sequence ID to force updates if details change
+                    const sequence = Math.floor(now.getTime() / 1000);
 
-                    // 4. 2 Hours Before
-                    icsContent += "BEGIN:VALARM\nTRIGGER:-PT2H\nDESCRIPTION:Lembrete de Escala (2h)\nACTION:DISPLAY\nEND:VALARM\n";
+                    icsContent += `BEGIN:VEVENT${CRLF}`;
+                    icsContent += `UID:${att.id}@midiaadperus.app${CRLF}`; 
+                    icsContent += `DTSTAMP:${now.toISOString().replace(/-|:|\.\d+/g, "")}${CRLF}`; 
+                    icsContent += `SEQUENCE:${sequence}${CRLF}`;
+                    icsContent += `DTSTART:${formatFloating(start)}${CRLF}`;
+                    icsContent += `DTEND:${formatFloating(end)}${CRLF}`;
+                    icsContent += `SUMMARY:Escala Mídia: ${evt.name}${CRLF}`;
+                    icsContent += `DESCRIPTION:Função: ${att.role || att.servingDept} | Local: ${evt.location || 'Sede'}${CRLF}`;
+                    icsContent += `LOCATION:${evt.location || 'AD Perus'}${CRLF}`;
+                    icsContent += `STATUS:CONFIRMED${CRLF}`;
                     
-                    // 5. 30 Minutes Before
-                    icsContent += "BEGIN:VALARM\nTRIGGER:-PT30M\nDESCRIPTION:Lembrete de Escala (30min)\nACTION:DISPLAY\nEND:VALARM\n";
+                    // --- ALARMS ---
+                    // 3 Days
+                    icsContent += `BEGIN:VALARM${CRLF}TRIGGER:-P3D${CRLF}DESCRIPTION:Lembrete Escala (3d)${CRLF}ACTION:DISPLAY${CRLF}END:VALARM${CRLF}`;
+                    // 1 Day
+                    icsContent += `BEGIN:VALARM${CRLF}TRIGGER:-P1D${CRLF}DESCRIPTION:Lembrete Escala (Amanhã)${CRLF}ACTION:DISPLAY${CRLF}END:VALARM${CRLF}`;
+                    // Morning of (10 hours before, approx morning if event is night)
+                    icsContent += `BEGIN:VALARM${CRLF}TRIGGER:-PT10H${CRLF}DESCRIPTION:Lembrete Escala (Hoje)${CRLF}ACTION:DISPLAY${CRLF}END:VALARM${CRLF}`;
+                    // 2 Hours
+                    icsContent += `BEGIN:VALARM${CRLF}TRIGGER:-PT2H${CRLF}DESCRIPTION:Lembrete Escala (2h)${CRLF}ACTION:DISPLAY${CRLF}END:VALARM${CRLF}`;
+                    // 30 Min
+                    icsContent += `BEGIN:VALARM${CRLF}TRIGGER:-PT30M${CRLF}DESCRIPTION:Lembrete Escala (30min)${CRLF}ACTION:DISPLAY${CRLF}END:VALARM${CRLF}`;
                     
-                    icsContent += "END:VEVENT\n";
+                    icsContent += `END:VEVENT${CRLF}`;
+                    eventCount++;
                 }
             });
 
-            icsContent += "END:VCALENDAR";
+            icsContent += `END:VCALENDAR`;
+
+            if (eventCount === 0) {
+                alert("Nenhuma escala futura encontrada para exportar. Verifique se você foi escalado e se a escala já foi publicada pelo líder.");
+                return;
+            }
 
             const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
             const link = document.createElement('a');
@@ -188,6 +205,9 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            
+            // Optional: Alert success
+            // alert(`Agenda baixada com ${eventCount} eventos! Abra o arquivo para atualizar seu calendário.`);
         };
 
         const CustomStyles = ({ primaryColor }) => (
